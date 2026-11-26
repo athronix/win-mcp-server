@@ -1,0 +1,28 @@
+{
+  "name": "win-mcp-servers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Windows 系统/软件/浏览器/桌面/资源/命令通道 MCP server 套件（6 server + 1 共享底座）",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @win-mcp/core",
+    "typecheck": "tsc -p packages/core/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "node scripts/smoke.mjs",
+    "verify:docs": "node scripts/verify-doc-api.mjs",
+    "check": "npm run typecheck && npm test && npm run smoke"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,98 @@
+# win-mcp-servers
+
+Windows 系统 / 软件 / 浏览器 / 桌面 / 资源 / 命令通道 的 MCP server 套件。
+
+**当前版本 v0.1.0：共享底座 `@win-mcp/core` 已可用，6 个业务 server 待接入（见路线图）。**
+
+## 设计目标
+
+让 AI Agent 安全地操作 Windows：默认只读、拒绝优先、写操作两阶段审批、全量审计、可回滚。
+
+- **6 个对外 server + 1 个共享底座**（底座是库，不是第 7 个 server）
+- 分级 **L0–L3** + 动态 AST 判级 → 决定"能不能执行 / 要不要审批 / 能否自动批准"
+- **两阶段审批**：首次只登记 `approvalId`（系统状态不变），用户确认后同参数重发才执行
+- 参数哈希绑定 + TTL + 一次性消费 → 防掉包、防重放
+- HashChain 审计 + 参数脱敏 → 可追溯、可校验
+
+设计来源：16 个开源项目的深度调研（见 `docs/01-investigation/PROJECT-OVERVIEW.md` 上游依据）。
+
+## 快速开始
+
+```bash
+npm install
+npm run build
+
+npm test          # 106 条单元/集成测试
+npm run smoke     # 12 项分级/审批冒烟（真实 MCP 客户端）
+npm run check     # typecheck + test + smoke
+```
+
+跑一个演示 server（不执行任何真实系统写操作）：
+
+```bash
+node examples/demo-server.mjs            # stdio
+node examples/demo-server.mjs --http 8765 # HTTP + /health
+```
+
+## 架构
+
+```
+MCP Client (WorkBuddy / Claude Code / Cursor)
+        │  stdio 或 streamable-HTTP（回环）
+        ▼
+┌──────────────────────────────────────────────┐
+│ @win-mcp/core（单实例，6 server 共用）        │
+│ contracts → registry → classify → policy     │
+│   → approval（两阶段 + 三分支归一）           │
+│   → audit（HashChain） / guard / taskmgr      │
+│   → transport（MCP 网关）                     │
+└──────────────────────────────────────────────┘
+```
+
+| 包/目录 | 说明 |
+|---|---|
+| `packages/core/src/contracts` | 风险等级、错误码、能力模型、统一 envelope |
+| `packages/core/src/classify` | L0–L3 词表、14 条硬禁、AST 判级（可注入） |
+| `packages/core/src/policy` | glob、默认红线、拒绝优先 7 步判定 |
+| `packages/core/src/approval` | 参数哈希、审批表、防自我放权、8 步编排 |
+| `packages/core/src/audit` | HashChain + 脱敏 + 校验 |
+| `packages/core/src/guard` | `expect[]` 断言 + `effect_state` 账本 |
+| `packages/core/src/transport` | `registerTool` 装饰、stdio/HTTP、`/health` |
+
+## 安全模型（不可协商）
+
+1. 硬禁命令、语法错误、预检不可用 → **进审批链之前** fail-closed
+2. 黑名单/进程保护/风险封顶被拒 → 审批无法绕过
+3. `autoApprove` 只跳过人工确认，不绕过任何红线，且默认关闭
+4. 策略放权（`policyControl`）→ 强制 L3 审批，绕过 `autoApprove`
+5. 审批凭证一次性、TTL 120s、与 `能力ID + 全部参数` 哈希绑定
+6. 密码/密钥不进 LLM 上下文，审计中脱敏为 `***`
+
+## 路线图
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| v0.1.0 | 底座：分级/策略/审批/审计/守卫/并发/网关 | ✅ |
+| CL-002 | PowerShell 常驻桥 + 真 AST 解析注入 | 待开始 |
+| CL-003 | `win-system`（注册表/服务/进程/事件日志） | 待开始 |
+| CL-004 | `win-shell`（可见控制台 + Git-Bash adapter） | 待开始 |
+| CL-005 | `win-apps`（winget + planId 分支） | 待开始 |
+| CL-006 | `win-resource`（指标 + 清理 + 调优回滚） | 待开始 |
+| CL-007 | `win-desktop`（UIA + ref + 门控） | 待开始 |
+| CL-008 | `win-browser`（CDP + 书签自研） | 待开始 |
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| `docs/01-investigation/PROJECT-OVERVIEW.md` | 背景、任务理解、验收目标 |
+| `docs/02-design/REQUIREMENT-v0.1.0.md` | FR/NFR 需求基线 |
+| `docs/02-design/TECHNICAL-SOLUTION-core.md` | **代码唯一行为来源**（接口签名/数据模型/实现逻辑） |
+| `docs/02-design/TEST-PLAN-v0.1.0.md` | 用例清单与通过标准 |
+| `docs/03-verification/TEST-REPORT-v0.1.0.md` | 验证结果、覆盖率、遗留风险 |
+| `docs/04-peripherals/DEPLOYMENT-GUIDE.md` | 接入配置与排障 |
+| `docs/04-peripherals/USER-GUIDE.md` | 能力清单与审批交互 |
+
+## 许可
+
+私有项目（`private: true`），未发布到 npm。

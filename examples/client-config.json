@@ -1,0 +1,17 @@
+{
+  "_comment": "v0.1.0 演示配置。真实业务 server 落地后替换 args 指向对应入口。",
+  "mcpServers": {
+    "win-mcp-stdio": {
+      "command": "node",
+      "args": [
+        "D:/Users/towyq/Documents/Projects/win-mcp-servers/examples/demo-server.mjs"
+      ],
+      "env": {
+        "WIN_MCP_AUDIT_SECRET": "change-me-in-local-env"
+      }
+    },
+    "win-mcp-http": {
+      "url": "http://localhost:8765/mcp"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@win-mcp/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "win-mcp-servers 共享底座：分级 / 策略 / 审批 / 审计 / 守卫 / 并发 / 网关",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.24.0"
+  }
+}
