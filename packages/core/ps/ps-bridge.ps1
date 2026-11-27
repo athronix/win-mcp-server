@@ -40,6 +40,18 @@ $script:ModuleWhitelist = @{
         'Get-ShellInfo',
         'Invoke-BashCommand'
     )
+    'apps' = @(
+        'Get-InstalledApps',
+        'Get-WingetInfo',
+        'Invoke-WingetAction',
+        'Start-Application'
+    )
+    'resource' = @(
+        'Get-ResourceMetrics',
+        'Get-VolumeSpace',
+        'Get-CleanupAnalysis',
+        'Clear-UserTempFiles'
+    )
 }
 $script:LoadedModules = @{}
 

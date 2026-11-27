@@ -1,6 +1,6 @@
 {
   "name": "win-mcp-servers",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Windows 系统/软件/浏览器/桌面/资源/命令通道 MCP server 套件（6 server + 1 共享底座）",
