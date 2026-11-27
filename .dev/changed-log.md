@@ -2,6 +2,18 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-017 跨请求 watch + 事件订阅负结果（v0.14.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `desktop.ui.watch`(L0, arm/status/cancel/list)；desktop 域共 12 个 |
+| PS 新增 | `Start-UiWatch` / `Get-UiWatchStatus` / `Stop-UiWatch` / `Get-UiWatchList` / `Find-UiQuick` / `Get-UiOwnerWindowHandle` |
+| 关键设计 | arm 只记条件不阻塞；status 轻量扫描；命中自动移除 + 在所属窗口内出 ref；TTL 30min / 容量 32 |
+| 负结果 | UIA 事件订阅（进程内、独立 STA 进程、scriptblock→C# 计数器委托）四种组合 hits 全为 0，已放弃并记录证据 |
+| 删除代码 | Electron 的 MSAA 请求 + 以渲染宿主为根 FindAll（实测卡数十秒且返回 0 个子节点） |
+| 修复缺陷 | `Get-UiTree -Handle -1` 走进 Chromium settle，用垃圾句柄遍历（RootElement.NativeWindowHandle 指向 csrss），7 节点且可能挂死 |
+| 验证 | 302 测试 / 26 文件；smoke:desktop 17/17（DS-15/16/17） |
+
 ## CL-016 三个小缺口补齐（v0.13.0）
 
 | 项 | 内容 |

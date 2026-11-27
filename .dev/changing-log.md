@@ -19,7 +19,7 @@
 
 | 项 | 说明 |
 |---|---|
-| UIA 真事件订阅 | wait 已是服务端轮询（命中 ~86ms），但没有 Automation 事件回调 |
+| UIA 真事件订阅 | 已尝试四种组合，hits 全 0（见 CL-017）；要真事件需原生 IUIAutomation 或 WinEventHook |
 | 浏览器文件上传/下载、iframe 递归 | CDP 侧未做，`browser.cdp.eval` 可绕过 |
 | 浏览器遮挡检测 | `element.click()` 会绕过遮挡 |
 | 桌面批量动作 | FlaUI-MCP 的 batch 未做，多步需多次调用 |
