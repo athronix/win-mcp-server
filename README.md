@@ -46,7 +46,7 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | `win-system` | `node packages/servers/dist/system/bin.js` | 13 | ✅ v0.10.0（含备份回滚） |
 | `win-shell` | `node packages/servers/dist/shell/bin.js` | 4 | ✅ v0.4.0 |
 | `win-apps` | `node packages/servers/dist/apps/bin.js` | 8 | ✅ v0.10.0（plan/apply） |
-| `win-resource` | `node packages/servers/dist/resource/bin.js` | 4 | ✅ v0.5.0 |
+| `win-resource` | `node packages/servers/dist/resource/bin.js` | 9 | ✅ v0.11.0（含调优回滚） |
 | `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 10 | ✅ v0.8.0（UIA + 键鼠 + 门控） |
 | `win-browser` | `node packages/servers/dist/browser/bin.js` | 14 | ✅ v0.9.0（书签 + CDP） |
 
@@ -105,6 +105,7 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | CL-011 | `win-desktop`：UIA 语义树 + 受控键鼠 + 桌面门控 | ✅ |
 | CL-012 | `win-browser`：CDP 通道（导航/快照/动作/断言/截图/tabs） | ✅ |
 | CL-013 | 计划与回滚：planId 三分支 + backupId 逆序恢复 | ✅ |
+| CL-014 | 资源调优：声明式目录 + 快照 + 一键回滚 | ✅ |
 
 ## 文档
 

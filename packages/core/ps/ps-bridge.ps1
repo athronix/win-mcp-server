@@ -54,7 +54,12 @@ $script:ModuleWhitelist = @{
         'Get-ResourceMetrics',
         'Get-VolumeSpace',
         'Get-CleanupAnalysis',
-        'Clear-UserTempFiles'
+        'Clear-UserTempFiles',
+        'Get-TuningCatalog',
+        'New-TuningSnapshot',
+        'Invoke-TuningApply',
+        'Restore-TuningSnapshot',
+        'Get-TuningSnapshots'
     )
     'desktop' = @(
         'Get-ScreenCapture',
