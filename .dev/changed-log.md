@@ -2,6 +2,18 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-015 等待机制与门控指示器（v0.12.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `desktop.ui.wait`(L0) / `browser.cdp.wait`(L1) |
+| 新模块 | `core/desktop/indicator.ts`、`ps/control-indicator.ps1`、PS `Find-UiElementFast` + `Wait-UiCondition` |
+| 参考来源 | agent-desktop `wait` + `cursor-overlay`、CursorTouch 琥珀边缘指示器 |
+| 关键设计 | 两层扫描（轻量早退 + 命中后一次完整快照出 ref）；指示器点击穿透/不抢焦点/纯装饰 |
+| 性能 | 命中 4835ms → 86ms（同一窗口同一条件） |
+| 修复缺陷 | `desktop.ui.wait` 未登记门控表（被 D-01 覆盖断言抓住，会误判 direct） |
+| 验证 | 295 测试 / 25 文件；smoke:desktop 14/14、smoke:cdp 15/15 |
+
 ## CL-014 资源调优：声明式目录 + 快照 + 一键回滚（v0.11.0）
 
 | 项 | 内容 |
