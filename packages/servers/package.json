@@ -1,6 +1,6 @@
 {
   "name": "@win-mcp/servers",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "win-mcp-servers 六个业务 server（system/apps/browser/desktop/resource/shell）",
@@ -10,7 +10,9 @@
     "win-mcp-system": "./dist/system/bin.js",
     "win-mcp-shell": "./dist/shell/bin.js",
     "win-mcp-apps": "./dist/apps/bin.js",
-    "win-mcp-resource": "./dist/resource/bin.js"
+    "win-mcp-resource": "./dist/resource/bin.js",
+    "win-mcp-desktop": "./dist/desktop/bin.js",
+    "win-mcp-browser": "./dist/browser/bin.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"

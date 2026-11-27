@@ -52,6 +52,20 @@ $script:ModuleWhitelist = @{
         'Get-CleanupAnalysis',
         'Clear-UserTempFiles'
     )
+    'desktop' = @(
+        'Get-ScreenCapture',
+        'Get-WindowList',
+        'Set-WindowState',
+        'Get-ClipboardContent',
+        'Set-ClipboardContent'
+    )
+    'browser' = @(
+        'Get-BrowserProfiles',
+        'Get-Bookmarks',
+        'Add-Bookmark',
+        'Remove-Bookmark',
+        'Open-Url'
+    )
 }
 $script:LoadedModules = @{}
 

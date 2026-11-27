@@ -47,7 +47,8 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | `win-shell` | `node packages/servers/dist/shell/bin.js` | 4 | ✅ v0.4.0 |
 | `win-apps` | `node packages/servers/dist/apps/bin.js` | 6 | ✅ v0.5.0 |
 | `win-resource` | `node packages/servers/dist/resource/bin.js` | 4 | ✅ v0.5.0 |
-| `win-desktop` / `win-browser` | 待 CL-007/008 | — | ⏳ |
+| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 5 | ✅ v0.6.0 |
+| `win-browser` | `node packages/servers/dist/browser/bin.js` | 5 | ✅ v0.6.0 |
 
 system 能力：`system.info.get`、`service.list/control`、`process.list/terminate`、`eventlog.query`、`task.list`、`registry.read/write`、`startup.list`、`network.get`。
 只读全部 L0 直放；服务控制/结束进程/写注册表为 L2，走审批；受保护进程与 HKLM 写由策略直拒。

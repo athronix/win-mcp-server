@@ -252,6 +252,16 @@ describe('FR-103 策略判定', () => {
     expect(v.matchedRule).toBe('pathDenylist');
   });
 
+  it('P-24 URL 参数不参与文件路径策略', () => {
+    const v = engine.evaluate({
+      capabilityId: 'browser.bookmark.add',
+      params: { url: 'https://example.com/path' },
+      risk: 'L2',
+      approved: true,
+    });
+    expect(v.allowed).toBe(true);
+  });
+
   it('P-23 显式路径参数不受 pathEvidence 影响', () => {
     const v = engine.evaluate({
       capabilityId: 'system.file.write',

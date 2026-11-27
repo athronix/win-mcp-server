@@ -45,7 +45,12 @@ export function pathMatchesAny(p: string, regexes: readonly RegExp[]): boolean {
   return regexes.some((re) => re.test(p) || re.test(`${p}\\`) || re.test(`${p}/`));
 }
 
+const URI_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 export function looksLikePath(s: string): boolean {
+  // URLs (https://...) must not be treated as file-system paths, otherwise
+  // path allowlists reject perfectly valid URL arguments.
+  if (URI_RE.test(s)) return false;
   return DRIVE_RE.test(s) || UNC_RE.test(s) || (SEP_RE.test(s) && s.length > 2);
 }
 
