@@ -5,7 +5,7 @@
  * 只做只读动作（快照、getText、读状态），绝不点击或注入按键——
  * 冒烟不应该干扰用户正在用的桌面。
  */
-import { PowerShellBridge } from '../packages/core/dist/index.js';
+import { PowerShellBridge, createSpawnIndicator } from '../packages/core/dist/index.js';
 
 const results = [];
 let failed = 0;
@@ -78,6 +78,45 @@ try {
       check('DS-06', '按 ref 只读读取（getText）', true, 'skip: 无文本节点');
     }
   }
+
+  // ---------- CL-015: 等待机制与指示器 ----------
+  if (tree !== null && chosen !== null) {
+    const textNodeForWait = tree.nodes.find((n) => n.role === 'text' && n.name.length >= 2);
+    if (textNodeForWait !== undefined) {
+      const needle = textNodeForWait.name.slice(0, Math.min(6, textNodeForWait.name.length));
+      const waitHit = await mod('Wait-UiCondition', {
+        Handle: chosen.handle,
+        Text: needle,
+        TimeoutMs: 5000,
+        MaxNodes: 500,
+      });
+      check(
+        'DS-12',
+        '等待条件命中并返回可用 ref',
+        waitHit.matched === true && /^@s\d+:e\d+$/.test(String(waitHit.ref ?? '')),
+        `waited=${waitHit.waitedMs}ms polls=${waitHit.polls} ref=${String(waitHit.ref)}`,
+      );
+    } else {
+      check('DS-12', '等待条件命中并返回可用 ref', false, '无可用文本节点');
+    }
+
+    let timeoutCode = '';
+    try {
+      await mod('Wait-UiCondition', { Handle: chosen.handle, Text: 'zzz-win-mcp-not-exist-zzz', TimeoutMs: 700, PollMs: 150 });
+    } catch (error) {
+      timeoutCode = error?.detail?.code ?? '';
+    }
+    check('DS-13', '等待超时返回 TIMEOUT（不是静默失败）', timeoutCode === 'TIMEOUT', timeoutCode);
+  } else {
+    check('DS-12', '等待条件命中并返回可用 ref', false, '无可用窗口');
+    check('DS-13', '等待超时返回 TIMEOUT（不是静默失败）', false, '无可用窗口');
+  }
+
+  const indicator = createSpawnIndicator({ onError: () => undefined });
+  const handle = indicator.show(1);
+  const shown = handle !== null && indicator.active;
+  indicator.hide();
+  check('DS-14', '门控指示器可启动并立即回收', shown && !indicator.active, `pid=${handle?.pid ?? 0}`);
 
   let bareRefCode = '';
   try {

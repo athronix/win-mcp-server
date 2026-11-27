@@ -15,6 +15,7 @@ describe('桌面控制门控表', () => {
 
   it('D-02 只读类归为 other', () => {
     expect(controlClassOf('desktop.ui.snapshot')).toBe('other');
+    expect(controlClassOf('desktop.ui.wait')).toBe('other');
     expect(controlClassOf('desktop.window.list')).toBe('other');
     expect(controlClassOf('desktop.input.send', { action: 'move' })).toBe('other');
   });
@@ -71,7 +72,7 @@ describe('桌面控制门控表', () => {
   });
 
   it('D-12 覆盖检查能报出未登记能力', () => {
-    expect(unclassifiedCapabilities(['desktop.ui.act', 'desktop.ui.snapshot'])).toEqual([]);
+    expect(unclassifiedCapabilities(['desktop.ui.act', 'desktop.ui.snapshot', 'desktop.ui.wait'])).toEqual([]);
     expect(unclassifiedCapabilities(['desktop.ui.act', 'desktop.mystery.act'])).toEqual(['desktop.mystery.act']);
   });
 });

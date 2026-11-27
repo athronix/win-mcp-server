@@ -47,8 +47,8 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | `win-shell` | `node packages/servers/dist/shell/bin.js` | 4 | ✅ v0.4.0 |
 | `win-apps` | `node packages/servers/dist/apps/bin.js` | 8 | ✅ v0.10.0（plan/apply） |
 | `win-resource` | `node packages/servers/dist/resource/bin.js` | 9 | ✅ v0.11.0（含调优回滚） |
-| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 10 | ✅ v0.8.0（UIA + 键鼠 + 门控） |
-| `win-browser` | `node packages/servers/dist/browser/bin.js` | 14 | ✅ v0.9.0（书签 + CDP） |
+| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 11 | ✅ v0.12.0（UIA + 键鼠 + 门控 + wait） |
+| `win-browser` | `node packages/servers/dist/browser/bin.js` | 15 | ✅ v0.12.0（书签 + CDP + wait） |
 
 system 能力：`system.info.get`、`service.list/control`、`process.list/terminate`、`eventlog.query`、`task.list`、`registry.read/write`、`startup.list`、`network.get`。
 只读全部 L0 直放；服务控制/结束进程/写注册表为 L2，走审批；受保护进程与 HKLM 写由策略直拒。
@@ -106,6 +106,7 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | CL-012 | `win-browser`：CDP 通道（导航/快照/动作/断言/截图/tabs） | ✅ |
 | CL-013 | 计划与回滚：planId 三分支 + backupId 逆序恢复 | ✅ |
 | CL-014 | 资源调优：声明式目录 + 快照 + 一键回滚 | ✅ |
+| CL-015 | 等待机制（UIA / CDP）+ 门控视觉指示器 | ✅ |
 
 ## 文档
 

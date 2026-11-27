@@ -33,6 +33,7 @@ export * from './bridge/errors.js';
 export * from './desktop/control-policy.js';
 export * from './desktop/consent.js';
 export * from './desktop/gate.js';
+export * from './desktop/indicator.js';
 export * from './desktop/io.js';
 export * from './desktop/ref.js';
 

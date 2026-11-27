@@ -250,6 +250,35 @@ describe('页面控制器（假客户端）', () => {
     expect(calls.some((call) => call.includes('const conditions'))).toBe(true);
   });
 
+  it('K-18b wait 把条件编进页内脚本，并在超时时返回 matched=false', async () => {
+    const expressions: string[] = [];
+    const send = vi.fn(async (method: string, params: Record<string, unknown>) => {
+      if (method === 'Target.attachToTarget') return { sessionId: 'S1' };
+      if (method === 'Runtime.evaluate') {
+        const expression = String(params['expression'] ?? '');
+        expressions.push(expression);
+        if (expression.includes('const deadline')) {
+          return { result: { value: { matched: false, waitedMs: 900, reason: 'timeout' } } };
+        }
+        return { result: { value: { nodes: [], truncated: false, url: 'u', title: 't' } } };
+      }
+      return {};
+    });
+    const page = await PageController.attach({ send, on: vi.fn(), closed: false } as unknown as CdpClient, 'T1');
+    const result = await page.wait({ selector: '#result', text: '已完成', timeoutMs: 900, pollMs: 100 });
+    expect(result).toMatchObject({ matched: false, reason: 'timeout' });
+    const script = expressions.find((item) => item.includes('const deadline')) ?? '';
+    expect(script).toContain('#result');
+    expect(script).toContain('已完成');
+    expect(script).toContain('900');
+  });
+
+  it('K-18c wait 缺少全部条件 → INVALID_PARAMS（不白等 10 秒）', async () => {
+    const client = makeClient({ 'Target.attachToTarget': { sessionId: 'S1' } });
+    const page = await PageController.attach(client, 'T1');
+    await expect(page.wait({})).rejects.toMatchObject({ code: 'INVALID_PARAMS' });
+  });
+
   it('K-18 expect 里的 ref 属于旧快照 → STALE_REF', async () => {
     const client = makeClient({ 'Target.attachToTarget': { sessionId: 'S1' } });
     const page = await PageController.attach(client, 'T1');

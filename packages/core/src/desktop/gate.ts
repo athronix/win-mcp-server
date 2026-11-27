@@ -1,5 +1,6 @@
 import { ToolFailure } from '../contracts/errors.js';
 import type { ConsentAnswer, ConsentRunner } from './consent.js';
+import type { IndicatorController } from './indicator.js';
 import { isControlPolicy, requiresControl, type ControlPolicy } from './control-policy.js';
 
 /**
@@ -40,6 +41,8 @@ export interface DesktopGateDeps {
   /** 同意倒计时秒数，0 = 不弹窗直接放行（无人值守） */
   consentSeconds?: number;
   agentName?: string;
+  /** 琥珀色边缘指示器（纯装饰，失败不影响门控） */
+  indicator?: IndicatorController;
   onEvent?: (event: string, detail: Record<string, unknown>) => void;
 }
 
@@ -69,6 +72,7 @@ export class DesktopControlGate {
   readonly #consentSeconds: number;
   readonly #agentName: string;
   readonly #onEvent: (event: string, detail: Record<string, unknown>) => void;
+  readonly #indicator: IndicatorController | undefined;
   #lease: Lease | undefined;
 
   constructor(deps: DesktopGateDeps) {
@@ -79,6 +83,7 @@ export class DesktopControlGate {
     this.#consentSeconds = deps.consentSeconds ?? 10;
     this.#agentName = deps.agentName ?? 'win-mcp';
     this.#onEvent = deps.onEvent ?? (() => undefined);
+    this.#indicator = deps.indicator;
   }
 
   get leased(): boolean {
@@ -99,6 +104,7 @@ export class DesktopControlGate {
       foreground: state.foreground,
       cursor: state.cursor ?? null,
       lastConsent: lease?.consent ?? null,
+      indicatorActive: this.#indicator?.active ?? false,
       note:
         '门控是协调而非独占：用户移动鼠标超过阈值即夺回控制，下一次门控调用需重新同意。' +
         'consent_countdown_seconds=0 表示不弹窗（无人值守）。',
@@ -118,6 +124,7 @@ export class DesktopControlGate {
   /** 用户主动归还控制权 */
   release(): void {
     this.#lease = undefined;
+    this.#indicator?.hide();
     this.#onEvent('lease-released', {});
   }
 
@@ -136,9 +143,11 @@ export class DesktopControlGate {
       const idleFromLease = this.#now() - lease.lastActivityAt;
       if (idleFromLease > this.#leaseTtlMs) {
         this.#lease = undefined;
+        this.#indicator?.hide();
         this.#onEvent('lease-expired', { idleFromLease });
       } else if (this.#stolen(state, lease)) {
         this.#lease = undefined;
+        this.#indicator?.hide();
         this.#onEvent('user-steal', { idleMs: state.idleMs });
         throw new ToolFailure(
           'USER_CONTROL',
@@ -174,6 +183,8 @@ export class DesktopControlGate {
     }
 
     this.#lease = { acquiredAt: this.#now(), lastActivityAt: this.#now(), consent: answer };
+    // 指示器寿命与租约一致；租约续期不会重置它，到期后最多多显示一会儿
+    this.#indicator?.show(Math.ceil(this.#leaseTtlMs / 1000));
     this.#onEvent('lease-acquired', { capabilityId, consent: answer });
     return { gated: true, policy: state.policy, leaseAcquired: true, consent: answer };
   }

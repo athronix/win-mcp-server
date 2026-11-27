@@ -71,7 +71,8 @@ $script:ModuleWhitelist = @{
         'Invoke-UiAction',
         'Send-UiInput',
         'Get-ControlState',
-        'Set-ControlPolicy'
+        'Set-ControlPolicy',
+        'Wait-UiCondition'
     )
     'browser' = @(
         'Get-BrowserProfiles',

@@ -4,6 +4,7 @@ import {
   ToolFailure,
   createBridgeControlIo,
   createSpawnConsentRunner,
+  createSpawnIndicator,
   remoteErrorToToolError,
   type CapabilitySpec,
   type PowerShellBridge,
@@ -48,6 +49,9 @@ export function desktopCapabilities(bridge: PowerShellBridge): CapabilitySpec[] 
   const gate = new DesktopControlGate({
     io: createBridgeControlIo(bridge),
     consent: createSpawnConsentRunner(),
+    indicator: createSpawnIndicator({
+      onError: (message) => process.stderr.write(`[win-desktop][indicator] ${message}\n`),
+    }),
     consentSeconds: consentSeconds(),
     onEvent: (event, detail) => {
       process.stderr.write(`[win-desktop][control] ${event} ${JSON.stringify(detail)}\n`);
@@ -268,6 +272,49 @@ export function desktopCapabilities(bridge: PowerShellBridge): CapabilitySpec[] 
         return {
           data: { ...(result as Record<string, unknown>), control: probe },
           warnings: probe.consent === 'timeout' ? ['同意倒计时无应答，已按策略自动放行'] : [],
+        };
+      },
+    },
+    {
+      id: 'desktop.ui.wait',
+      name: '等待 UI 条件',
+      description:
+        '在服务端等待某个元素出现/消失（L0，只读）。条件：text（名称包含）/ role / automationId，可组合。' +
+        '命中时返回匹配节点的 ref 与所在快照 id，可直接用于 desktop.ui.act；超时抛 TIMEOUT。' +
+        '比调用方反复快照便宜得多——一次调用完成等待，只回传一个节点。',
+      risk: 'L0',
+      idempotent: true,
+      timeoutMs: 70_000,
+      inputSchema: {
+        handle: z.number().int().optional().describe('窗口句柄，省略则取前台窗口'),
+        text: z.string().optional().describe('元素名称包含该字符串（不区分大小写）'),
+        role: z.string().optional().describe('角色精确匹配，如 button / textbox'),
+        automationId: z.string().optional().describe('AutomationId 精确匹配'),
+        disappear: z.boolean().optional().describe('true 表示等待该条件消失，默认 false'),
+        timeoutMs: z.number().int().min(100).max(60000).optional().describe('最长等待，默认 10000'),
+        pollMs: z.number().int().min(100).max(5000).optional().describe('轮询间隔，默认 250'),
+        maxNodes: z.number().int().min(20).max(1500).optional().describe('每轮最多遍历节点，默认 400'),
+        maxDepth: z.number().int().min(1).max(20).optional().describe('每轮最大深度，默认 8'),
+      },
+      async handler(params) {
+        return {
+          data: await guard(
+            call(
+              'Wait-UiCondition',
+              {
+                Handle: num(params.handle, 0),
+                Text: str(params.text),
+                Role: str(params.role),
+                AutomationId: str(params.automationId),
+                Disappear: bool(params.disappear, false),
+                TimeoutMs: num(params.timeoutMs, 10_000),
+                PollMs: num(params.pollMs, 250),
+                MaxNodes: num(params.maxNodes, 400),
+                MaxDepth: num(params.maxDepth, 8),
+              },
+              num(params.timeoutMs, 10_000) + 10_000,
+            ),
+          ),
         };
       },
     },

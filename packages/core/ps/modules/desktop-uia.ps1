@@ -424,7 +424,8 @@ function Get-UiTree {
         [int]$MaxDepth = 8,
         [int]$MaxNodes = 600,
         [bool]$IncludeOffscreen = $false,
-        [string]$Filter = ''
+        [string]$Filter = '',
+        [bool]$EnableRendererSettle = $true
     )
 
     Initialize-Uia
@@ -443,7 +444,7 @@ function Get-UiTree {
     $rendererRoot = 'window'
     $renderHostCount = 0
     $walkRoot = $root
-    if ($meta.handle -ne 0) {
+    if ($meta.handle -ne 0 -and $EnableRendererSettle) {
         $windowHandle = [IntPtr]::new([int64]$meta.handle)
         try {
             $rendererTriggers = Enable-RendererAccessibility -WindowHandle $windowHandle
@@ -1050,5 +1051,138 @@ function Get-ControlState {
         foreground    = $foregroundInfo
         interactive   = [bool][Environment]::UserInteractive
         capturedAt    = (Get-Date).ToString('o')
+    }
+}
+# ---------------------------------------------------------------------------
+# CL-015: wait for a UI condition (server-side polling)
+# ---------------------------------------------------------------------------
+# Why server-side: every client-side poll costs a tool round-trip plus a full
+# snapshot transfer. One call that blocks up to TimeoutMs is dramatically cheaper
+# and lets the returned node carry a usable ref from the matching snapshot.
+function Test-UiNodeMatch {
+    param($Node, [string]$Text, [string]$Role, [string]$AutomationId)
+
+    if ($Role.Length -gt 0 -and [string]$Node.role -ne $Role) { return $false }
+    if ($AutomationId.Length -gt 0 -and [string]$Node.automationId -ne $AutomationId) { return $false }
+    if ($Text.Length -gt 0) {
+        $name = [string]$Node.name
+        if ($name.IndexOf($Text, [StringComparison]::OrdinalIgnoreCase) -lt 0) { return $false }
+    }
+    return $true
+}
+
+# Lightweight scan used by the wait loop: reads only ControlType/Name/AutomationId.
+# The full snapshot probes 7 control patterns + bounds per node, which costs
+# seconds on big windows -- far too slow to run every poll.
+function Find-UiElementFast {
+    param($Element, [int]$Depth, $Context)
+
+    if ($Context.Visited -ge $Context.MaxNodes) {
+        $Context.Truncated = $true
+        return $null
+    }
+    $Context.Visited = $Context.Visited + 1
+
+    $controlType = Get-UiaSafe { $Element.Current.ControlType } $null
+    $role = ConvertTo-UiaRole $controlType
+    $name = [string](Get-UiaSafe { $Element.Current.Name } '')
+    $automationId = [string](Get-UiaSafe { $Element.Current.AutomationId } '')
+
+    $candidate = [ordered]@{ role = $role; name = $name; automationId = $automationId }
+    if (Test-UiNodeMatch -Node $candidate -Text $Context.Text -Role $Context.Role -AutomationId $Context.AutomationId) {
+        return [ordered]@{ role = $role; name = $name; automationId = $automationId; element = $Element }
+    }
+
+    if ($Depth -ge $Context.MaxDepth) { return $null }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $child = Get-UiaSafe { $walker.GetFirstChild($Element) } $null
+    while ($null -ne $child) {
+        $result = Find-UiElementFast -Element $child -Depth ($Depth + 1) -Context $Context
+        if ($null -ne $result) { return $result }
+        $child = Get-UiaSafe { $walker.GetNextSibling($child) } $null
+    }
+    return $null
+}
+
+function Wait-UiCondition {
+    param(
+        [int64]$Handle = 0,
+        [string]$Text = '',
+        [string]$Role = '',
+        [string]$AutomationId = '',
+        [bool]$Disappear = $false,
+        [int]$TimeoutMs = 10000,
+        [int]$PollMs = 250,
+        [int]$MaxNodes = 400,
+        [int]$MaxDepth = 8
+    )
+
+    if ($TimeoutMs -lt 100) { $TimeoutMs = 100 }
+    if ($TimeoutMs -gt 60000) { $TimeoutMs = 60000 }
+    if ($PollMs -lt 100) { $PollMs = 100 }
+    if ($PollMs -gt 5000) { $PollMs = 5000 }
+    if ([string]::IsNullOrEmpty($Text) -and [string]::IsNullOrEmpty($Role) -and [string]::IsNullOrEmpty($AutomationId)) {
+        throw 'INVALID_PARAMS: wait 至少需要一个条件（text / role / automationId）'
+    }
+
+    Initialize-Uia
+    $root = Get-UiaWindowRoot -Handle $Handle
+    $meta = Get-UiaWindowMeta -Root $root
+
+    # Chromium/Electron 需要一次 settle，否则整棵树都是空的，wait 会一直等外壳
+    if ($meta.handle -ne 0) {
+        try { [void](Enable-RendererAccessibility -WindowHandle ([IntPtr]::new([int64]$meta.handle))) } catch { }
+    }
+
+    $started = [DateTime]::UtcNow
+    $polls = 0
+    $lastVisited = 0
+
+    while ($true) {
+        $polls = $polls + 1
+        $context = @{
+            Text = $Text; Role = $Role; AutomationId = $AutomationId
+            MaxNodes = $MaxNodes; MaxDepth = $MaxDepth
+            Visited = 0; Truncated = $false
+        }
+        $found = Find-UiElementFast -Element $root -Depth 0 -Context $context
+        $lastVisited = $context.Visited
+        $elapsed = [int]([DateTime]::UtcNow - $started).TotalMilliseconds
+
+        if ($Disappear -and $null -eq $found) {
+            return [ordered]@{
+                matched = $true; condition = 'disappear'; waitedMs = $elapsed; polls = $polls
+                visited = $lastVisited; window = $meta
+            }
+        }
+
+        if (-not $Disappear -and $null -ne $found) {
+            # 命中后再做一次完整快照，把 ref 交给调用方直接使用
+            $snapshot = Get-UiTree -Handle $meta.handle -MaxDepth $MaxDepth -MaxNodes ([Math]::Max($MaxNodes, 600)) -EnableRendererSettle $false
+            $matchedNode = $null
+            foreach ($node in $snapshot.nodes) {
+                if (Test-UiNodeMatch -Node $node -Text $Text -Role $Role -AutomationId $AutomationId) {
+                    $matchedNode = $node
+                    break
+                }
+            }
+            return [ordered]@{
+                matched    = $true
+                condition  = 'appear'
+                waitedMs   = $elapsed
+                polls      = $polls
+                visited    = $lastVisited
+                window     = $meta
+                snapshotId = $snapshot.snapshotId
+                ref        = if ($null -ne $matchedNode) { [string]$matchedNode.ref } else { $null }
+                node       = $matchedNode
+            }
+        }
+
+        if ($elapsed -ge $TimeoutMs) {
+            throw "TIMEOUT: 等待 ${TimeoutMs}ms 未满足条件（polls=$polls, visited=$lastVisited, 条件 text='$Text' role='$Role' id='$AutomationId' disappear=$Disappear, 窗口 '$($meta.title)'）"
+        }
+
+        Start-Sleep -Milliseconds $PollMs
     }
 }

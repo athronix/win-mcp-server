@@ -86,6 +86,19 @@ try {
   }
   check('CD-10', '断言不满足时 fail 而不是照旧 ref 乱点', assertCode === 'GUARD_ASSERTION_FAILED', `${assertCode} (ref=${target?.ref})`);
 
+  // ---------- CL-015: 页面内等待 ----------
+  const waited = await page.wait({ selector: '#out', timeoutMs: 5000 });
+  check('CD-14', '等待选择器命中（服务端阻塞）', waited.matched === true, `waited=${waited.waitedMs}ms`);
+
+  let waitCode = '';
+  try {
+    const missed = await page.wait({ selector: '#definitely-absent-node', timeoutMs: 700, pollMs: 150 });
+    if (!missed.matched) waitCode = 'TIMEOUT';
+  } catch (error) {
+    waitCode = error?.code ?? '';
+  }
+  check('CD-15', '等待超时返回 TIMEOUT', waitCode === 'TIMEOUT', waitCode);
+
   const shot = await page.screenshot();
   check('CD-11', '页面截图落盘', typeof shot.path === 'string' && shot.bytes > 1000, `${shot.path} ${shot.bytes}B`);
 

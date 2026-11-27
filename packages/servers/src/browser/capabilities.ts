@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CapabilitySpec, PowerShellBridge } from '@win-mcp/core';
+import { ToolFailure, type CapabilitySpec, type PowerShellBridge } from '@win-mcp/core';
 import { guard } from '../shared/errors.js';
 import { CdpRuntime } from './runtime.js';
 
@@ -245,6 +245,45 @@ export function browserCapabilities(bridge: PowerShellBridge): CapabilitySpec[] 
             }),
           ),
         };
+      },
+    },
+    {
+      id: 'browser.cdp.wait',
+      name: '等待页面条件',
+      description:
+        '在页面内等待条件成立（selector / 文本 / URL 片段），服务端阻塞到超时（L1）。' +
+        '比调用方反复快照便宜得多：一次调用完成等待，并在命中后附带一份新快照（ref 可直接用）。' +
+        '超时抛 TIMEOUT，不代表页面坏了，先快照看实际状态再决定是否重试。',
+      risk: 'L1',
+      timeoutMs: 70_000,
+      inputSchema: {
+        selector: z.string().optional().describe('CSS 选择器，如 #result 或 button[type=submit]'),
+        text: z.string().optional().describe('页面 body 文本包含该字符串'),
+        urlContains: z.string().optional().describe('location.href 包含该片段'),
+        timeoutMs: z.number().int().min(200).max(60000).optional().describe('最长等待，默认 10000'),
+        pollMs: z.number().int().min(100).max(2000).optional().describe('轮询间隔，默认 250'),
+        withSnapshot: z.boolean().optional().describe('命中后是否附带新快照，默认 true'),
+      },
+      async handler(params) {
+        const page = await guard(cdp.ensure());
+        const result = await guard(
+          page.wait({
+            ...(typeof params.selector === 'string' ? { selector: params.selector } : {}),
+            ...(typeof params.text === 'string' ? { text: params.text } : {}),
+            ...(typeof params.urlContains === 'string' ? { urlContains: params.urlContains } : {}),
+            ...(typeof params.timeoutMs === 'number' ? { timeoutMs: params.timeoutMs } : {}),
+            ...(typeof params.pollMs === 'number' ? { pollMs: params.pollMs } : {}),
+          }),
+        );
+        if (!result.matched) {
+          throw new ToolFailure('TIMEOUT', `等待 ${result.waitedMs}ms 未满足条件；先 browser.cdp.snapshot 看实际状态`);
+        }
+        const withSnapshot = params.withSnapshot !== false;
+        const data: Record<string, unknown> = { ...result };
+        if (withSnapshot) {
+          data['snapshot'] = await guard(page.snapshot({ maxNodes: 400 }));
+        }
+        return { data };
       },
     },
     {

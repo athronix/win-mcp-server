@@ -2,7 +2,7 @@
 import { runServer } from '../shared/runner.js';
 import { desktopCapabilities } from './capabilities.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.12.0';
 
 const INSTRUCTIONS = [
   'win-mcp-desktop：桌面操作（截图 / 窗口 / 剪贴板 / UIA 语义树 / 受控键鼠 / 桌面门控）。',
@@ -13,6 +13,8 @@ const INSTRUCTIONS = [
   '两者还受桌面门控约束：按策略（relaxed/balanced/strict）可能弹倒计时对话框征求控制权。用户移动鼠标即夺回控制，后续调用返回 USER_CONTROL —— 这是正常语义，不是故障，别重试，先确认是否继续。',
   'denied 时返回 CONTROL_DENIED。无人值守场景由 WIN_MCP_DESKTOP_CONSENT_SECONDS=0 关闭弹窗（默认 10 秒）。',
   'desktop.control.policy 是 L3 强制人工审批：放宽门控等于允许 AI 静默干扰用户，不要代用户决定。',
+  '别用反复快照来"等"：desktop.ui.wait 在服务端等条件成立（text/role/automationId，含 disappear），命中直接给你可用 ref，超时抛 TIMEOUT。',
+  '门控租约生效期间屏幕边缘会出现琥珀色指示器（WIN_MCP_DESKTOP_INDICATOR=0 可关闭）；它只是提示，不拦截任何操作。',
   '截屏返回 PNG 文件路径（在 %TEMP% 下），不是 base64。',
 ].join('');
 

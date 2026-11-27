@@ -463,6 +463,57 @@ export class PageController {
     };
   }
 
+  /**
+   * 等待页面条件（服务端阻塞，最多 timeoutMs）。
+   *
+   * 与调用方自己轮询快照的区别：一次调用完成等待，不用每次把整棵语义树传一遍。
+   * 条件在页内求值（selector / 文本 / URL 片段），任一满足即返回。
+   */
+  async wait(options: {
+    selector?: string;
+    text?: string;
+    urlContains?: string;
+    timeoutMs?: number;
+    pollMs?: number;
+  }): Promise<{ matched: boolean; waitedMs: number; reason?: string }> {
+    const timeoutMs = Math.min(Math.max(options.timeoutMs ?? 10_000, 200), 60_000);
+    const pollMs = Math.min(Math.max(options.pollMs ?? 250, 100), 2_000);
+    if (
+      (options.selector ?? '').length === 0 &&
+      (options.text ?? '').length === 0 &&
+      (options.urlContains ?? '').length === 0
+    ) {
+      throw new CdpError('INVALID_PARAMS', 'wait 至少需要一个条件（selector / text / urlContains）');
+    }
+
+    const script = `
+(async () => {
+  const deadline = Date.now() + ${timeoutMs};
+  const selector = ${JSON.stringify(options.selector ?? '')};
+  const needle = ${JSON.stringify(options.text ?? '')};
+  const urlPart = ${JSON.stringify(options.urlContains ?? '')};
+  const started = Date.now();
+  const check = () => {
+    if (urlPart.length > 0 && location.href.indexOf(urlPart) < 0) return false;
+    if (selector.length > 0 && document.querySelector(selector) === null) return false;
+    if (needle.length > 0) {
+      const body = document.body ? (document.body.innerText || '') : '';
+      if (body.indexOf(needle) < 0) return false;
+    }
+    return true;
+  };
+  if (check()) return { matched: true, waitedMs: 0 };
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, ${pollMs}));
+    if (check()) return { matched: true, waitedMs: Date.now() - started };
+  }
+  return { matched: false, waitedMs: Date.now() - started, reason: 'timeout' };
+})()
+`;
+
+    return this.evaluate<{ matched: boolean; waitedMs: number; reason?: string }>(script, timeoutMs + 5_000);
+  }
+
   async screenshot(): Promise<{ path: string; bytes: number }> {
     const shot = await this.#client.send<{ data: string }>(
       'Page.captureScreenshot',

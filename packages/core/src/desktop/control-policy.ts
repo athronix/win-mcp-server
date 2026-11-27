@@ -29,6 +29,8 @@ const CONTROL_TABLE: Record<string, TableEntry> = {
   'desktop.window.list': 'other',
   'desktop.clipboard.get': 'other',
   'desktop.ui.snapshot': 'other',
+  // 等待只是读，不动鼠标键盘；归 other 才不会被门控逼着弹窗
+  'desktop.ui.wait': 'other',
   'desktop.control.state': 'other',
   'desktop.control.policy': 'other',
   'desktop.window.control': {
