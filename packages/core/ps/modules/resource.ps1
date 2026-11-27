@@ -196,6 +196,13 @@ $script:TuneCatalog = @{
         requiresAdmin = $false
         description   = 'Switch the active power plan to High performance'
     }
+    'service.diagtrack-manual' = @{
+        kind          = 'service'
+        name          = 'DiagTrack'
+        startMode     = 'Manual'
+        requiresAdmin = $true
+        description   = 'Set DiagTrack (Connected User Experiences and Telemetry) startup to Manual'
+    }
     'system.network-throttling' = @{
         kind          = 'registry'
         path          = 'HKLM:/SOFTWARE/Microsoft/Windows NT\CurrentVersion\Multimedia\SystemProfile'
@@ -254,6 +261,19 @@ function Get-ActivePowerScheme {
     return ''
 }
 
+function Get-TuneServiceState {
+    param([string]$Name)
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { return [ordered]@{ existed = $false; startMode = $null; status = $null } }
+    $startMode = ''
+    try {
+        $wmi = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f $Name) -ErrorAction Stop
+        $startMode = [string]$wmi.StartMode
+    } catch { $startMode = '' }
+    return [ordered]@{ existed = $true; startMode = $startMode; status = [string]$svc.Status }
+}
+
 function Test-TuneAdmin {
     try {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -277,12 +297,18 @@ function Get-TuningCatalog {
         elseif ($entry.kind -eq 'power') {
             $current = Get-ActivePowerScheme
         }
+        elseif ($entry.kind -eq 'service') {
+            $state = Get-TuneServiceState -Name $entry.name
+            $current = if ([bool]$state.existed) { [string]$state.startMode } else { '(service missing)' }
+        }
         [void]$items.Add([ordered]@{
             key           = $key
             kind          = $entry.kind
             description   = $entry.description
             requiresAdmin = [bool]$entry.requiresAdmin
-            target        = if ($entry.kind -eq 'registry') { [string]$entry.target } else { [string]$entry.scheme }
+            target        = if ($entry.kind -eq 'registry') { [string]$entry.target }
+                            elseif ($entry.kind -eq 'service') { [string]$entry.startMode }
+                            else { [string]$entry.scheme }
             currentValue  = $current
             applicable    = (-not $entry.requiresAdmin) -or $isAdmin
         })
@@ -338,6 +364,18 @@ function New-TuningSnapshot {
                 kind           = 'power'
                 previousScheme = Get-ActivePowerScheme
                 target         = $entry.scheme
+            })
+        }
+        elseif ($entry.kind -eq 'service') {
+            $state = Get-TuneServiceState -Name $entry.name
+            [void]$entries.Add([ordered]@{
+                key           = [string]$key
+                kind          = 'service'
+                name          = [string]$entry.name
+                existed       = [bool]$state.existed
+                previousMode  = [string]$state.startMode
+                previousStatus = [string]$state.status
+                target        = [string]$entry.startMode
             })
         }
     }
@@ -415,6 +453,17 @@ function Invoke-TuningApply {
                     verified = [bool]$after.existed
                 })
             }
+            elseif ($entry.kind -eq 'service') {
+                $previous = Get-TuneServiceState -Name $entry.name
+                Set-Service -Name $entry.name -StartupType $entry.startMode -ErrorAction Stop
+                $after = Get-TuneServiceState -Name $entry.name
+                [void]$applied.Add([ordered]@{
+                    key = $keyName; kind = 'service'
+                    previousValue = [string]$previous.startMode
+                    after = [string]$after.startMode
+                    verified = ([string]$after.startMode -eq [string]$entry.startMode)
+                })
+            }
             elseif ($entry.kind -eq 'power') {
                 $previous = Get-ActivePowerScheme
                 & powercfg /setactive $entry.scheme | Out-Null
@@ -440,7 +489,9 @@ function Invoke-TuningApply {
         if ($byKey.ContainsKey($keyName)) {
             $byKey[$keyName].previousValue = if ([string]$entry.kind -eq 'registry') {
                 if ([bool]$entry.existed) { [string]$entry.value } else { '(not set)' }
-            } else { [string]$entry.previousScheme }
+            }
+            elseif ([string]$entry.kind -eq 'service') { [string]$entry.previousMode }
+            else { [string]$entry.previousScheme }
         }
     }
 
@@ -485,6 +536,21 @@ function Restore-TuningSnapshot {
                     }
                     [void]$restored.Add([ordered]@{ key = [string]$entry.key; action = 'removed-value' })
                 }
+            }
+            elseif ([string]$entry.kind -eq 'service') {
+                $name = [string]$entry.name
+                if (-not [bool]$entry.existed) {
+                    [void]$restored.Add([ordered]@{ key = [string]$entry.key; action = 'skipped-service-missing' })
+                    continue
+                }
+                $previousMode = [string]$entry.previousMode
+                if (-not [string]::IsNullOrWhiteSpace($previousMode)) {
+                    Set-Service -Name $name -StartupType $previousMode -ErrorAction Stop
+                }
+                if ([string]$entry.previousStatus -eq 'Running') {
+                    Start-Service -Name $name -ErrorAction SilentlyContinue
+                }
+                [void]$restored.Add([ordered]@{ key = [string]$entry.key; action = 'restored-service'; startMode = $previousMode })
             }
             elseif ([string]$entry.kind -eq 'power') {
                 $previous = [string]$entry.previousScheme

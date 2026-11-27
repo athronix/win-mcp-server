@@ -115,6 +115,26 @@ try {
   }
   check('PL-07', '参数与预览不一致 → PLAN_MISMATCH', mismatchCode === 'PLAN_MISMATCH', mismatchCode);
 
+  // ---------- 已装检测：精确模式 ----------
+  const state = await bridge.call('module', {
+    module: 'apps',
+    function: 'Get-WingetInstalledState',
+    args: { IdsJson: JSON.stringify([ABSENT_ID]), Mode: 'exact' },
+  });
+  check(
+    'PL-08',
+    '已装检测走 winget list --id 精确模式',
+    state.source === 'winget-list-exact' && state.packages[0]?.installed === false,
+    `source=${String(state.source)} installed=${String(state.packages[0]?.installed)} exitCode=${String(state.packages[0]?.exitCode)}`,
+  );
+
+  const bulk = await bridge.call('module', {
+    module: 'apps',
+    function: 'Get-WingetInstalledState',
+    args: { IdsJson: JSON.stringify([ABSENT_ID]), Mode: 'bulk' },
+  });
+  check('PL-09', 'bulk 模式仍可用（作为降级路径）', bulk.source === 'winget-list-substring', String(bulk.source));
+
   // ---------- backupId 回滚 ----------
   const write1 = await handlerOf(system, 'system.registry.write')(
     { path: TEST_KEY, name: TEST_NAME, value: 'v1', type: 'String' },

@@ -152,7 +152,7 @@ function Start-Application {
 # CL-013: winget 计划用的"已装状态"探测
 # ---------------------------------------------------------------------------
 function Get-WingetInstalledState {
-    param([string]$IdsJson = '[]', [int]$MaxOutputChars = 200000)
+    param([string]$IdsJson = '[]', [int]$MaxOutputChars = 200000, [string]$Mode = 'exact')
 
     $info = Get-WingetInfo
     if ($info.available -ne $true) {
@@ -164,31 +164,62 @@ function Get-WingetInstalledState {
         $ids = @($IdsJson | ConvertFrom-Json)
     }
 
-    # 一次 list 比 N 次 `list --id` 快得多；用 Id 列做子串匹配，
-    # 这是启发式（Id 列不会被截断），但足以区分"装了/没装"。
-    $text = ''
+    # exact：逐个 `winget list --id <id> -e`，精确但每题一次调用（<=10 个才用）
+    # bulk ：一次 `winget list` 后做 Id 列子串匹配，快但是启发式
+    $useExact = ($Mode -eq 'exact' -and $ids.Count -le 10)
+    $packages = New-Object System.Collections.ArrayList
+
+    if ($useExact) {
+        foreach ($id in $ids) {
+            $needle = [string]$id
+            if ([string]::IsNullOrWhiteSpace($needle)) {
+                [void]$packages.Add([ordered]@{ id = $needle; installed = $false; source = 'empty-id' })
+                continue
+            }
+            $text = ''
+            $exitCode = 0
+            try {
+                $text = [string](& winget list --id $needle -e --accept-source-agreements 2>&1 | Out-String -Width 4096)
+                $exitCode = [int]$LASTEXITCODE
+            } catch {
+                $text = ''
+                $exitCode = -1
+            }
+            if ($text.Length -gt $MaxOutputChars) { $text = $text.Substring(0, $MaxOutputChars) }
+            # winget 在"没有匹配"时可能返回 0 且输出 No installed package found
+            $noMatch = ($text -match 'No installed package|找不到已安装|No applicable');
+            $installed = ($exitCode -eq 0) -and (-not $noMatch)
+            [void]$packages.Add([ordered]@{ id = $needle; installed = $installed; exitCode = $exitCode; source = 'winget-list-exact' })
+        }
+        return [ordered]@{
+            available = $true
+            version   = $info.version
+            packages  = @($packages.ToArray())
+            source    = 'winget-list-exact'
+        }
+    }
+
+    $bulkText = ''
     try {
-        $text = [string](& winget list --accept-source-agreements 2>&1 | Out-String -Width 4096)
+        $bulkText = [string](& winget list --accept-source-agreements 2>&1 | Out-String -Width 4096)
     } catch {
         return [ordered]@{ available = $false; version = $info.version; packages = @(); source = 'list-failed'; message = $_.Exception.Message }
     }
+    if ($bulkText.Length -gt $MaxOutputChars) { $bulkText = $bulkText.Substring(0, $MaxOutputChars) }
 
-    if ($text.Length -gt $MaxOutputChars) { $text = $text.Substring(0, $MaxOutputChars) }
-
-    $packages = New-Object System.Collections.ArrayList
     foreach ($id in $ids) {
         $needle = [string]$id
         $installed = $false
         if ($needle.Length -gt 0) {
-            $installed = $text.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            $installed = $bulkText.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0
         }
-        [void]$packages.Add([ordered]@{ id = $needle; installed = $installed })
+        [void]$packages.Add([ordered]@{ id = $needle; installed = $installed; source = 'winget-list-substring' })
     }
 
     [ordered]@{
         available = $true
         version   = $info.version
         packages  = @($packages.ToArray())
-        source    = 'winget-list'
+        source    = 'winget-list-substring'
     }
 }

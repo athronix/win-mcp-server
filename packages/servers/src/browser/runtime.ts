@@ -137,6 +137,33 @@ export class CdpRuntime {
     return page;
   }
 
+  /**
+   * 附着到已在监听调试端口的浏览器（用户自己带 --remote-debugging-port 启动的实例）。
+   *
+   * 这是"复用真实登录态"的唯一正路：我们不去碰用户的 profile，
+   * 只是连上他已经开放的调试端口。浏览器在已有实例运行时会忽略该参数，
+   * 所以调用前必须彻底退出日常浏览器。
+   */
+  async attach(port: number): Promise<Record<string, unknown>> {
+    let version;
+    try {
+      version = await fetchVersion(port);
+    } catch (error) {
+      throw new CdpError(
+        'CDP_UNAVAILABLE',
+        `端口 ${port} 没有可用的 DevTools 端点（${error instanceof Error ? error.message : String(error)}）；` +
+          '请确认浏览器是以 --remote-debugging-port=' + String(port) + ' 启动的，且没有已在运行的实例',
+      );
+    }
+
+    rememberEndpoint({ port, wsUrl: version.webSocketDebuggerUrl, browser: version.Browser, userDataDir: '' });
+    this.#client?.close();
+    this.#client = undefined;
+    this.#page = undefined;
+    this.#endpoint = { port, wsUrl: version.webSocketDebuggerUrl, browser: version.Browser };
+    return { attached: true, port, browser: version.Browser, wsUrl: version.webSocketDebuggerUrl };
+  }
+
   async targets(): Promise<CdpTarget[]> {
     const client = await this.#requireClient();
     const listed = await client.send<{ targetInfos: CdpTarget[] }>('Target.getTargets');

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { CdpRuntime } from '../src/browser/runtime.js';
 import {
   CdpClient,
   CdpError,
@@ -304,5 +305,15 @@ describe('浏览器 ref 解析', () => {
     const error = new CdpError('STALE_REF', '旧快照');
     expect(error.code).toBe('STALE_REF');
     expect(error.name).toBe('CdpError');
+  });
+});
+
+describe('attach 到已有调试端口', () => {
+  it('K-22 端口不可达 → PROVIDER_UNAVAILABLE 且提示排查方向', async () => {
+    const runtime = new CdpRuntime({ connectTimeoutMs: 1_000 });
+    await expect(runtime.attach(9)).rejects.toMatchObject({
+      code: 'CDP_UNAVAILABLE',
+      message: expect.stringContaining('--remote-debugging-port=9'),
+    });
   });
 });

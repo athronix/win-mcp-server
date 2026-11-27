@@ -83,6 +83,24 @@ try {
     blocked.data.plan.blockers.join('；'),
   );
 
+  const serviceItem = (await handlerOf('resource.tune.catalog')({}, L('L0'))).data.items.find(
+    (entry) => entry.key === 'service.diagtrack-manual',
+  );
+  check(
+    'TN-11',
+    '服务类调优项出现在目录且标为需管理员',
+    serviceItem !== undefined && serviceItem.requiresAdmin === true && String(serviceItem.currentValue).length > 0,
+    `current=${String(serviceItem?.currentValue)} admin=${String(serviceItem?.requiresAdmin)}`,
+  );
+
+  const servicePlan = await handlerOf('resource.tune.plan')({ keys: ['service.diagtrack-manual'] }, L('L1'));
+  check(
+    'TN-12',
+    '未提权时服务类调优计划 → blocked',
+    servicePlan.data.plan.status === 'blocked',
+    servicePlan.data.plan.blockers.join('；'),
+  );
+
   const unknown = await handlerOf('resource.tune.plan')({ keys: ['hack.anything'] }, L('L1'));
   check(
     'TN-06',

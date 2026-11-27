@@ -163,6 +163,22 @@ export function browserCapabilities(bridge: PowerShellBridge): CapabilitySpec[] 
       },
     },
     {
+      id: 'browser.cdp.attach',
+      name: '附着到已有调试端口',
+      description:
+        '连接到用户自己启动的调试实例（--remote-debugging-port），从而复用真实登录态与本机 profile（L1）。' +
+        '前提：日常浏览器必须**先彻底退出**——已有实例在跑时新进程会忽略调试参数。' +
+        '失败返回 PROVIDER_UNAVAILABLE 并给出排查提示。',
+      risk: 'L1',
+      timeoutMs: 20_000,
+      inputSchema: {
+        port: z.number().int().min(1).max(65535).describe('浏览器已开放的 DevTools 端口，如 9222'),
+      },
+      async handler(params) {
+        return { data: await guard(cdp.attach(Number(params.port ?? 0))) };
+      },
+    },
+    {
       id: 'browser.cdp.navigate',
       name: '导航',
       description:

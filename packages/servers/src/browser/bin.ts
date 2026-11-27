@@ -2,12 +2,13 @@
 import { runServer } from '../shared/runner.js';
 import { browserCapabilities } from './capabilities.js';
 
-const VERSION = '0.12.0';
+const VERSION = '0.13.0';
 
 const INSTRUCTIONS = [
   'win-mcp-browser：浏览器操作。两条通道别混用：书签走 Bookmarks 文件（browser.bookmark.*），页面操作走 CDP（browser.cdp.*）。',
   '页面自动化标准循环：browser.cdp.launch → browser.cdp.snapshot 拿 @b<N>:e<M> ref → browser.cdp.act 操作 → 读 readback 或重新快照验证。',
-  'CDP 默认用独立 profile（%LOCALAPPDATA%\\win-mcp\\browser-profile）：没有你的登录态与扩展，但也不会污染日常浏览器。要复用真实登录态属已知边界。',
+  'CDP 默认用独立 profile（%LOCALAPPDATA%\\win-mcp\\browser-profile）：没有你的登录态与扩展，但也不会污染日常浏览器。',
+  '要复用真实登录态：让用户先彻底退出浏览器，再以 --remote-debugging-port=<port> 启动，然后 browser.cdp.attach { port }。已有实例在跑时调试端口不会打开，这是最常见的踩坑点。',
   'ref 只对本次快照有效；导航或框架重建后必须重新快照，否则返回 STALE_REF。动作前的 expect 是字面断言（≤16 条），页面已变就失败而不是硬点。',
   'launch/navigate/act/tab.close 为 L2：首次返回 APPROVAL_REQUIRED，需用户确认后原样重发并带 __approvalId。browser.cdp.eval 是 L3，必须人工审批。',
   '导航 load 超时不等于失败（SPA 可能仍在加载）：先 snapshot 看实际状态，不要盲目重试导航。',
