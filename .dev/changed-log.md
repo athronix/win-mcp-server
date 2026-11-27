@@ -2,6 +2,16 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-016 三个小缺口补齐（v0.13.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `browser.cdp.attach`(L1)；browser 域共 16 个 |
+| 调优目录 | 5 → 6 项，新增 `service.diagtrack-manual`（服务 StartMode，需管理员） |
+| 已装检测 | `Get-WingetInstalledState` 新增 `exact` 模式（逐个 `winget list --id -e`），ids>10 降级 `bulk` |
+| 关键设计 | attach 走"用户自己开调试端口"的正路；判定同时看退出码与 No-installed 文案（含本地化） |
+| 验证 | 296 测试 / 25 文件；smoke:plan 16/16（PL-08/09）、smoke:tune 12/12（TN-11/12） |
+
 ## CL-015 等待机制与门控指示器（v0.12.0）
 
 | 项 | 内容 |
