@@ -2,6 +2,17 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-012 win-browser：CDP 通道（v0.9.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `browser.cdp.status/launch/navigate/snapshot/act/screenshot/tabs/eval` + `browser.tab.close`（browser 域共 14 个） |
+| 新模块 | servers `browser/{cdp,page,runtime}.ts`、`shared/errors.ts` |
+| 参考来源 | agent-browser（ref + 重取快照）、BrowserSkill（expect 断言 / 不盲重试）、chrome-devtools-mcp（CDP 域） |
+| 关键设计 | 端口 0 + DevToolsActivePort 读回；启动前删残留端口文件；就绪需 /json/version 真可达；回环主机名双试 |
+| 修复缺陷 | `/json/list` 的 id 与 `Target.getTargets` 的 targetId 混用导致 attach Invalid parameters；快照空返回崩溃 |
+| 验证 | 242 测试 / 19 文件；smoke:cdp 13/13（headless Edge）；smoke:desktop 11/11；底座 12/12、桥 6/6 |
+
 ## CL-011 win-desktop：UIA 语义树 + 受控键鼠 + 桌面门控（v0.8.0）
 
 | 项 | 内容 |

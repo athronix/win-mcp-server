@@ -1,6 +1,6 @@
 # 文档索引
 
-> 文档版本：v0.8.0 · 最后更新：2026-11-27
+> 文档版本：v0.9.0 · 最后更新：2026-11-27
 > 规则：文档是代码行为的唯一来源；代码与文档不符即缺陷（NFR-6）。
 
 ## Phase 1 调研
@@ -44,6 +44,7 @@
 | `docs/changes/CL-007-008.md` | desktop + browser 合并版记录（URL 误判修复） | ✅ |
 | `docs/changes/CL-009-010.md` | Skill bundle 与接入包 | ✅ |
 | `docs/changes/CL-011.md` | UIA 语义树 / 键鼠 / 桌面门控（含 Electron 结论） | ✅ |
+| `docs/changes/CL-012.md` | CDP 通道（协议/ref/断言/踩坑/边界） | ✅ |
 
 ## 仓库根
 
