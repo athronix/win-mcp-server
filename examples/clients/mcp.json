@@ -1,0 +1,35 @@
+{
+  "_comment": "win-mcp-servers 6 个 server 的 stdio 接入配置。把 args[0] 换成你本机的绝对路径；如需 HTTP，改用 url 字段并先设 WIN_MCP_HTTP_PORT 启动。",
+  "mcpServers": {
+    "win-system": {
+      "command": "node",
+      "args": ["D:/Users/towyq/Documents/Projects/win-mcp-servers/packages/servers/dist/system/bin.js"],
+      "env": { "WIN_MCP_AUDIT_SECRET": "change-me" }
+    },
+    "win-shell": {
+      "command": "node",
+      "args": ["D:/Users/towyq/Documents/Projects/win-mcp-servers/packages/servers/dist/shell/bin.js"],
+      "env": { "WIN_MCP_AUDIT_SECRET": "change-me" }
+    },
+    "win-apps": {
+      "command": "node",
+      "args": ["D:/Users/towyq/Documents/Projects/win-mcp-servers/packages/servers/dist/apps/bin.js"],
+      "env": { "WIN_MCP_AUDIT_SECRET": "change-me" }
+    },
+    "win-resource": {
+      "command": "node",
+      "args": ["D:/Users/towyq/Documents/Projects/win-mcp-servers/packages/servers/dist/resource/bin.js"],
+      "env": { "WIN_MCP_AUDIT_SECRET": "change-me" }
+    },
+    "win-desktop": {
+      "command": "node",
+      "args": ["D:/Users/towyq/Documents/Projects/win-mcp-servers/packages/servers/dist/desktop/bin.js"],
+      "env": { "WIN_MCP_AUDIT_SECRET": "change-me" }
+    },
+    "win-browser": {
+      "command": "node",
+      "args": ["D:/Users/towyq/Documents/Projects/win-mcp-servers/packages/servers/dist/browser/bin.js"],
+      "env": { "WIN_MCP_AUDIT_SECRET": "change-me" }
+    }
+  }
+}

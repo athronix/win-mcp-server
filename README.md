@@ -95,12 +95,13 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 |---|---|---|
 | v0.1.0 | 底座：分级/策略/审批/审计/守卫/并发/网关 | ✅ |
 | CL-002 | PowerShell 常驻桥 + 真 AST 解析注入 | ✅ |
-| CL-003 | `win-system`（注册表/服务/进程/事件日志） | 待开始 |
-| CL-004 | `win-shell`（可见控制台 + Git-Bash adapter） | 待开始 |
-| CL-005 | `win-apps`（winget + planId 分支） | 待开始 |
-| CL-006 | `win-resource`（指标 + 清理 + 调优回滚） | 待开始 |
-| CL-007 | `win-desktop`（UIA + ref + 门控） | 待开始 |
-| CL-008 | `win-browser`（CDP + 书签自研） | 待开始 |
+| CL-003 | `win-system`（注册表/服务/进程/事件日志） | ✅ |
+| CL-004 | `win-shell`（命令通道 + Git-Bash adapter） | ✅ |
+| CL-005 | `win-apps`（winget + 应用清单） | ✅ |
+| CL-006 | `win-resource`（指标 + 磁盘 + 清理） | ✅ |
+| CL-007 | `win-desktop`（截图/窗口/剪贴板） | ✅ |
+| CL-008 | `win-browser`（书签 + 打开 URL） | ✅ |
+| CL-009/010 | 6 个 Skill bundle + 客户端接入包 | ✅ |
 
 ## 文档
 
@@ -113,6 +114,8 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | `docs/03-verification/TEST-REPORT-v0.1.0.md` | 验证结果、覆盖率、遗留风险 |
 | `docs/04-peripherals/DEPLOYMENT-GUIDE.md` | 接入配置与排障 |
 | `docs/04-peripherals/USER-GUIDE.md` | 能力清单与审批交互 |
+| `skills/<server>/SKILL.md` | 6 个场景手册（能力速查 + SOP + 不要做） |
+| `examples/clients/mcp.json` | 6 server 的客户端接入配置 |
 
 ## 许可
 
