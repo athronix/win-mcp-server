@@ -36,26 +36,47 @@ try {
   const preferred =
     candidates.find((w) => /文件资源管理器|Explorer|记事本|Notepad|设置|Settings/i.test(w.title)) ?? candidates[0];
 
-  const tree = await mod('Get-UiTree', { Handle: preferred.handle, MaxDepth: 6, MaxNodes: 400 });
+  // 逐窗口试快照：最小化窗口与无 a11y 的 Electron 窗口节点会接近 0，
+  // 冒烟要挑一个"看得到内容"的窗口，而不是固定第一个。
+  let tree = null;
+  let chosen = null;
+  const tried = [];
+  for (const candidate of candidates.slice(0, 8)) {
+    const attempt = await mod('Get-UiTree', { Handle: candidate.handle, MaxDepth: 6, MaxNodes: 400 });
+    tried.push(`${candidate.title || '(无标题)'}=${attempt.nodeCount}`);
+    if (attempt.nodeCount >= 5) {
+      tree = attempt;
+      chosen = candidate;
+      break;
+    }
+  }
+
   check(
     'DS-03',
     'UIA 语义树可生成（含 ref/depth/role）',
-    tree.nodeCount > 0 && /^@s\d+:e\d+$/.test(tree.nodes[0].ref) && typeof tree.nodes[0].depth === 'number',
-    `window=${tree.window.title} nodes=${tree.nodeCount} renderer=${tree.rendererRoot}`,
+    tree !== null && /^@s\d+:e\d+$/.test(tree.nodes[0].ref) && typeof tree.nodes[0].depth === 'number',
+    tree === null ? `所有候选窗口都无子树：${tried.slice(0, 4).join(' | ')}` : `window=${tree.window.title} nodes=${tree.nodeCount} renderer=${tree.rendererRoot}`,
   );
 
-  const preOrder = tree.nodes.every((node, index) => index === 0 || node.depth <= tree.nodes[index - 1].depth + 1);
-  check('DS-04', '扁平列表是前序（子节点 depth 最多 +1）', preOrder, preOrder ? '' : 'depth 序列异常');
-
-  const withActions = tree.nodes.filter((n) => n.actions.length > 0);
-  check('DS-05', '节点带可执行动作（控件模式）', withActions.length > 0, `actionable=${withActions.length}`);
-
-  const textNode = tree.nodes.find((n) => n.role === 'text' && n.name.length > 0);
-  if (textNode !== undefined) {
-    const read = await mod('Invoke-UiAction', { Ref: textNode.ref, Action: 'getText' });
-    check('DS-06', '按 ref 只读读取（getText）', read.action === 'getText', `ref=${textNode.ref}`);
+  if (tree === null) {
+    // 没有可用窗口时不要伪装成功：明确记失败并结束
+    check('DS-04', '扁平列表是前序（子节点 depth 最多 +1）', false, '无可用快照');
+    check('DS-05', '节点带可执行动作（控件模式）', false, '无可用快照');
+    check('DS-06', '按 ref 只读读取（getText）', false, '无可用快照');
   } else {
-    check('DS-06', '按 ref 只读读取（getText）', true, 'skip: 无文本节点');
+    const preOrder = tree.nodes.every((node, index) => index === 0 || node.depth <= tree.nodes[index - 1].depth + 1);
+    check('DS-04', '扁平列表是前序（子节点 depth 最多 +1）', preOrder, preOrder ? '' : 'depth 序列异常');
+
+    const withActions = tree.nodes.filter((n) => n.actions.length > 0);
+    check('DS-05', '节点带可执行动作（控件模式）', withActions.length > 0, `actionable=${withActions.length} window=${chosen?.title ?? ''}`);
+
+    const textNode = tree.nodes.find((n) => n.role === 'text' && n.name.length > 0);
+    if (textNode !== undefined) {
+      const read = await mod('Invoke-UiAction', { Ref: textNode.ref, Action: 'getText' });
+      check('DS-06', '按 ref 只读读取（getText）', read.action === 'getText', `ref=${textNode.ref}`);
+    } else {
+      check('DS-06', '按 ref 只读读取（getText）', true, 'skip: 无文本节点');
+    }
   }
 
   let bareRefCode = '';
@@ -76,7 +97,7 @@ try {
 
   let invalidActionCode = '';
   try {
-    await mod('Invoke-UiAction', { Ref: tree.nodes[0].ref, Action: 'formatDisk' });
+    await mod('Invoke-UiAction', { Ref: tree?.nodes[0]?.ref ?? '@s1:e0', Action: 'formatDisk' });
   } catch (error) {
     invalidActionCode = error?.detail?.code ?? error?.message ?? '';
   }

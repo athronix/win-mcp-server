@@ -28,6 +28,17 @@ export function remoteErrorToToolError(error: unknown, fallback: ErrorCode = 'IN
     return makeError(fallback, error.message);
   }
   const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === 'string') {
+    if ((ERROR_CODES as readonly string[]).includes(code)) {
+      return makeError(code as ErrorCode, message);
+    }
+    // 传输层错误码（CDP_* 等）统一归到可重试/不可用
+    if (code === 'CDP_TIMEOUT') return makeError('TIMEOUT', message, { transportCode: code });
+    if (code.startsWith('CDP_') || code.startsWith('BRIDGE_')) {
+      return makeError('PROVIDER_UNAVAILABLE', message, { transportCode: code });
+    }
+  }
   return makeError(fallback, message);
 }
 

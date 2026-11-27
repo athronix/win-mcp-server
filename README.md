@@ -48,7 +48,7 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | `win-apps` | `node packages/servers/dist/apps/bin.js` | 6 | ✅ v0.5.0 |
 | `win-resource` | `node packages/servers/dist/resource/bin.js` | 4 | ✅ v0.5.0 |
 | `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 10 | ✅ v0.8.0（UIA + 键鼠 + 门控） |
-| `win-browser` | `node packages/servers/dist/browser/bin.js` | 5 | ✅ v0.6.0 |
+| `win-browser` | `node packages/servers/dist/browser/bin.js` | 14 | ✅ v0.9.0（书签 + CDP） |
 
 system 能力：`system.info.get`、`service.list/control`、`process.list/terminate`、`eventlog.query`、`task.list`、`registry.read/write`、`startup.list`、`network.get`。
 只读全部 L0 直放；服务控制/结束进程/写注册表为 L2，走审批；受保护进程与 HKLM 写由策略直拒。
@@ -103,6 +103,7 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | CL-008 | `win-browser`（书签 + 打开 URL） | ✅ |
 | CL-009/010 | 6 个 Skill bundle + 客户端接入包 | ✅ |
 | CL-011 | `win-desktop`：UIA 语义树 + 受控键鼠 + 桌面门控 | ✅ |
+| CL-012 | `win-browser`：CDP 通道（导航/快照/动作/断言/截图/tabs） | ✅ |
 
 ## 文档
 
