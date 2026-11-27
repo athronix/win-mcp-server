@@ -88,6 +88,7 @@ export function cap(spec: CapabilitySpec): Capability {
     destructivePath: spec.destructivePath ?? false,
     dynamicRisk: spec.dynamicRisk ?? false,
     policyControl: spec.policyControl ?? false,
+    analysisOnly: spec.analysisOnly ?? false,
     timeoutMs: spec.timeoutMs ?? 30_000,
     snapshot: spec.snapshot ?? 'none',
     ...(policy !== undefined ? { policy } : {}),

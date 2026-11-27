@@ -280,6 +280,7 @@ export class ToolGate {
         ? { capabilityPolicy: ctx.capability.policy }
         : {}),
       ...(ctx.pathEvidence !== undefined ? { pathEvidence: ctx.pathEvidence } : {}),
+      ...(ctx.capability.analysisOnly ? { analysisOnly: true } : {}),
       ...(ctx.forceApproval ? { forceApproval: true } : {}),
     });
 

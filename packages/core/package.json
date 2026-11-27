@@ -1,6 +1,6 @@
 {
   "name": "@win-mcp/core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "win-mcp-servers 共享底座：分级 / 策略 / 审批 / 审计 / 守卫 / 并发 / 网关",

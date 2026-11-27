@@ -90,6 +90,19 @@ export function extractPathTokens(s: string): string[] {
   return Array.from(new Set(out));
 }
 
+/** 展开 `$env:NAME` 前缀（用于路径白/黑名单匹配，避免 `$env:TEMP\...` 被误判为白名单外） */
+export function expandEnvVars(
+  value: string,
+  env: Record<string, string | undefined>,
+): string {
+  return value.replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/gi, (match, name: string) => {
+    const direct = env[name];
+    if (direct !== undefined) return direct;
+    const upper = env[name.toUpperCase()];
+    return upper !== undefined ? upper : match;
+  });
+}
+
 export interface StringValue {
   key: string;
   value: string;

@@ -1,6 +1,6 @@
 {
   "name": "win-mcp-servers",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Windows 系统/软件/浏览器/桌面/资源/命令通道 MCP server 套件（6 server + 1 共享底座）",
@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @win-mcp/core && npm run build --workspace @win-mcp/servers",
-    "typecheck": "tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/servers/tsconfig.json --noEmit",
+    "typecheck": "npm run build --workspace @win-mcp/core && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/servers/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke.mjs",

@@ -5,6 +5,7 @@ import { riskAtLeast } from '../contracts/risk.js';
 import { DEFAULT_POLICY, type PolicyConfig } from './defaults.js';
 import {
   collectStringValues,
+  expandEnvVars,
   globToRegex,
   isCommandishKey,
   looksLikeCommandValue,
@@ -28,6 +29,8 @@ export interface PolicyRequest {
    * 而是只信任该证据——否则注释、here-string 里的路径文本会被误判为真实操作目标。
    */
   pathEvidence?: readonly string[];
+  /** 纯分析能力（不执行任何操作）：跳过路径/命令策略检查，仅保留能力 ID 校验 */
+  analysisOnly?: boolean;
 }
 
 export interface PolicyVerdict {
@@ -52,9 +55,14 @@ export class PolicyEngine {
   readonly #pathAllowRe: readonly RegExp[];
   readonly #cmdDenyRe: readonly RegExp[];
   readonly #cmdAllowRe: readonly RegExp[];
+  readonly #env: Record<string, string | undefined>;
 
-  constructor(config: PolicyConfig = DEFAULT_POLICY) {
+  constructor(
+    config: PolicyConfig = DEFAULT_POLICY,
+    opts: { env?: Record<string, string | undefined> } = {},
+  ) {
     this.#cfg = config;
+    this.#env = opts.env ?? process.env;
     this.#pathDenyRe = config.pathDenylist.map(globToRegex);
     this.#pathAllowRe = config.pathAllowlist.map(globToRegex);
     this.#cmdDenyRe = config.commandDenylist.map((p) => new RegExp(p, 'i'));
@@ -69,6 +77,12 @@ export class PolicyEngine {
     // 1. 能力 ID 必须合法（未注册由 registry 层拦截）
     if (!CAPABILITY_ID_PATTERN.test(req.capabilityId)) {
       return this.#deny('capability:invalid-id', `非法能力 ID：${req.capabilityId}`);
+    }
+
+    // 纯分析能力（如 shell.analyze）只做解析、不执行，跳过路径/命令检查；
+    // 使用该标记的能力必须保证 handler 无副作用。
+    if (req.analysisOnly === true) {
+      return { allowed: true, matchedRule: 'allow:analysis-only', requiresApproval: false };
     }
 
     const values = collectStringValues(req.params);
@@ -90,7 +104,7 @@ export class PolicyEngine {
     const capabilityPathDeny = (req.capabilityPolicy?.pathDenylist ?? []).map(globToRegex);
     for (const { key, value } of values) {
       for (const candidate of candidatesFor(key, value)) {
-        const p = normalizePath(candidate);
+        const p = normalizePath(expandEnvVars(candidate, this.#env));
         const denyRes = [...this.#pathDenyRe, ...capabilityPathDeny];
         if (pathMatchesAny(p, denyRes)) {
           return this.#deny('pathDenylist', `路径命中黑名单，已拒绝：${candidate}`, {
@@ -133,7 +147,7 @@ export class PolicyEngine {
       if (allowRes.length > 0) {
         for (const { key, value } of values) {
           for (const candidate of candidatesFor(key, value)) {
-            const p = normalizePath(candidate);
+            const p = normalizePath(expandEnvVars(candidate, this.#env));
             if (!pathMatchesAny(p, allowRes)) {
               return this.#deny('pathAllowlist:miss', `路径不在白名单内，已拒绝：${candidate}`, {
                 path: candidate,

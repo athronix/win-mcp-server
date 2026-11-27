@@ -78,6 +78,8 @@ export interface CapabilitySpec {
   dynamicRisk?: boolean;
   /** 策略自管理能力：放权必须强制人工审批（绕过 autoApprove） */
   policyControl?: boolean;
+  /** 纯分析能力（无副作用，如命令预检）：跳过路径/命令策略检查 */
+  analysisOnly?: boolean;
   timeoutMs?: number;
   snapshot?: 'none' | 'before';
   policy?: CapabilityPolicy;
@@ -99,6 +101,7 @@ export interface Capability {
   readonly destructivePath: boolean;
   readonly dynamicRisk: boolean;
   readonly policyControl: boolean;
+  readonly analysisOnly: boolean;
   readonly timeoutMs: number;
   readonly snapshot: 'none' | 'before';
   readonly policy?: CapabilityPolicy;

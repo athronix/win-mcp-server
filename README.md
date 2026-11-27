@@ -44,7 +44,7 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | server | 入口（stdio） | 能力数 | 状态 |
 |---|---|---|---|
 | `win-system` | `node packages/servers/dist/system/bin.js` | 11 | ✅ v0.3.0 |
-| `win-shell` | 待 CL-004 | — | ⏳ |
+| `win-shell` | `node packages/servers/dist/shell/bin.js` | 4 | ✅ v0.4.0 |
 | `win-apps` / `win-resource` | 待 CL-005/006 | — | ⏳ |
 | `win-desktop` / `win-browser` | 待 CL-007/008 | — | ⏳ |
 

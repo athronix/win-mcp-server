@@ -36,6 +36,10 @@ $script:ModuleWhitelist = @{
         'Get-StartupItems',
         'Get-NetworkConfig'
     )
+    'shell' = @(
+        'Get-ShellInfo',
+        'Invoke-BashCommand'
+    )
 }
 $script:LoadedModules = @{}
 

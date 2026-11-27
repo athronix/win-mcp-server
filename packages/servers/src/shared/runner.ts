@@ -12,6 +12,7 @@ import {
   startHttp,
   startStdio,
   type CapabilitySpec,
+  type DynamicClassifier,
   type PolicyConfig,
   type PolicyControlProvider,
 } from '@win-mcp/core';
@@ -28,6 +29,8 @@ export interface ServerRuntimeOptions {
   policy?: Partial<PolicyConfig>;
   /** 用真 PowerShell AST 做动态判级（shell 需要） */
   useBridgeClassifier?: boolean;
+  /** 自定义判级器（优先于 useBridgeClassifier） */
+  buildClassifier?: (ctx: ServerBuildContext) => DynamicClassifier;
   policyControl?: PolicyControlProvider;
 }
 
@@ -62,11 +65,18 @@ export async function runServer(options: ServerRuntimeOptions): Promise<void> {
   const store = new ApprovalStore({ ttlMs: policy.config.approvalTimeoutMs });
   const audit = new AuditChain({ ...(process.env.WIN_MCP_AUDIT_SECRET !== undefined ? { secret: process.env.WIN_MCP_AUDIT_SECRET } : {}) });
 
+  const classifier =
+    options.buildClassifier !== undefined
+      ? options.buildClassifier({ bridge })
+      : options.useBridgeClassifier === true
+        ? createBridgeClassifier(bridge)
+        : undefined;
+
   const gate = new ToolGate({
     policy,
     store,
     audit,
-    ...(options.useBridgeClassifier === true ? { classify: createBridgeClassifier(bridge) } : {}),
+    ...(classifier !== undefined ? { classify: classifier } : {}),
   });
 
   const server = createWinMcpServer({
