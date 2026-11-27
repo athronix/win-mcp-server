@@ -7,7 +7,7 @@ import {
   type ApprovalBranch,
   type ToolEnvelope,
 } from '../contracts/envelope.js';
-import { makeError, type ErrorCode } from '../contracts/errors.js';
+import { isToolFailure, makeError, type ErrorCode } from '../contracts/errors.js';
 import { maxRisk, type RiskLevel } from '../contracts/risk.js';
 import type { AuditChain, AuditOutcome } from '../audit/chain.js';
 import type { PolicyEngine } from '../policy/engine.js';
@@ -389,13 +389,17 @@ export class ToolGate {
         params: ctx.rest,
       });
       const message = error instanceof Error ? error.message : String(error);
-      const code: ErrorCode =
-        error instanceof Error && error.name === 'TimeoutError' ? 'TIMEOUT' : 'INTERNAL';
+      // 领域失败（ToolFailure）保留原始错误码；其余折叠为 INTERNAL/TIMEOUT
+      const code: ErrorCode = isToolFailure(error)
+        ? error.toolError.code
+        : error instanceof Error && error.name === 'TimeoutError'
+          ? 'TIMEOUT'
+          : 'INTERNAL';
       return {
         envelope: failureEnvelope({
           traceId: ctx.traceId,
           risk: ctx.risk,
-          error: makeError(code, message),
+          error: isToolFailure(error) ? error.toolError : makeError(code, message),
         }),
         executed: false,
       };

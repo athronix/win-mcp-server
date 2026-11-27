@@ -26,6 +26,13 @@ export * from './approval/gate.js';
 export * from './bridge/protocol.js';
 export * from './bridge/bridge.js';
 export * from './bridge/ast.js';
+export * from './bridge/errors.js';
+
+export * from './desktop/control-policy.js';
+export * from './desktop/consent.js';
+export * from './desktop/gate.js';
+export * from './desktop/io.js';
+export * from './desktop/ref.js';
 
 export * from './audit/chain.js';
 

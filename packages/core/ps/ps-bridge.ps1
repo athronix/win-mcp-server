@@ -57,7 +57,12 @@ $script:ModuleWhitelist = @{
         'Get-WindowList',
         'Set-WindowState',
         'Get-ClipboardContent',
-        'Set-ClipboardContent'
+        'Set-ClipboardContent',
+        'Get-UiTree',
+        'Invoke-UiAction',
+        'Send-UiInput',
+        'Get-ControlState',
+        'Set-ControlPolicy'
     )
     'browser' = @(
         'Get-BrowserProfiles',
@@ -390,6 +395,14 @@ while ($true) {
         }
     }
     catch {
-        Send-Fail -Id $requestId -Code 'BRIDGE_ERROR' -Message $_.Exception.Message -DurationMs ([int]$stopwatch.ElapsedMilliseconds)
+        # Module functions signal domain errors as "CODE: message" (e.g. STALE_REF: ...).
+        # Forward the leading token as the protocol error code so the Node side can map
+        # it onto a ToolError code instead of collapsing everything into BRIDGE_ERROR.
+        $failureMessage = $_.Exception.Message
+        $failureCode = 'BRIDGE_ERROR'
+        if ($failureMessage -match '^([A-Z][A-Z0-9_]{3,40}):\s') {
+            $failureCode = $Matches[1]
+        }
+        Send-Fail -Id $requestId -Code $failureCode -Message $failureMessage -DurationMs ([int]$stopwatch.ElapsedMilliseconds)
     }
 }

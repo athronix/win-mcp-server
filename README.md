@@ -47,7 +47,7 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | `win-shell` | `node packages/servers/dist/shell/bin.js` | 4 | ✅ v0.4.0 |
 | `win-apps` | `node packages/servers/dist/apps/bin.js` | 6 | ✅ v0.5.0 |
 | `win-resource` | `node packages/servers/dist/resource/bin.js` | 4 | ✅ v0.5.0 |
-| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 5 | ✅ v0.6.0 |
+| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 10 | ✅ v0.8.0（UIA + 键鼠 + 门控） |
 | `win-browser` | `node packages/servers/dist/browser/bin.js` | 5 | ✅ v0.6.0 |
 
 system 能力：`system.info.get`、`service.list/control`、`process.list/terminate`、`eventlog.query`、`task.list`、`registry.read/write`、`startup.list`、`network.get`。
@@ -102,6 +102,7 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | CL-007 | `win-desktop`（截图/窗口/剪贴板） | ✅ |
 | CL-008 | `win-browser`（书签 + 打开 URL） | ✅ |
 | CL-009/010 | 6 个 Skill bundle + 客户端接入包 | ✅ |
+| CL-011 | `win-desktop`：UIA 语义树 + 受控键鼠 + 桌面门控 | ✅ |
 
 ## 文档
 

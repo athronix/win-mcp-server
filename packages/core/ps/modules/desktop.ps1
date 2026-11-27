@@ -22,6 +22,7 @@ public class WinMcpDesktop {
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
 }
 '@
 }
@@ -146,3 +147,8 @@ function Set-ClipboardContent {
     try { $verified = [string](Get-Clipboard -Raw -ErrorAction Stop) } catch { }
     [ordered]@{ set = $true; length = $Text.Length; verifiedLength = $verified.Length }
 }
+
+# CL-011: UIA semantic tree, ref resolution, controlled input and desktop-control
+# state live in a sibling file. Dot-sourced here so the single 'desktop' module
+# entry in the bridge whitelist exposes all of them.
+. (Join-Path $PSScriptRoot 'desktop-uia.ps1')

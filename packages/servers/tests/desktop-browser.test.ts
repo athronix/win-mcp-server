@@ -9,6 +9,7 @@ import {
   PolicyEngine,
   PowerShellBridge,
   ToolGate,
+  unclassifiedCapabilities,
   type Capability,
   type CapabilityResult,
   type ToolEnvelope,
@@ -78,15 +79,28 @@ afterAll(async () => {
 });
 
 describe('CL-007/008 能力定义', () => {
-  it('D-01 desktop 5 个、browser 5 个，ID 三段式', () => {
+  it('D-01 desktop 10 个、browser 5 个，ID 三段式；桌面门控表覆盖全部 desktop 能力', () => {
     const filler = new PowerShellBridge();
     const desktop = desktopCapabilities(filler);
     const browser = browserCapabilities(filler);
-    expect(desktop).toHaveLength(5);
+    expect(desktop).toHaveLength(10);
     expect(browser).toHaveLength(5);
     for (const cap of [...desktop, ...browser]) {
       expect(cap.id).toMatch(/^(desktop|browser)\.[a-z-]+\.[a-z-]+$/);
     }
+    // 新增 desktop 能力若忘记登记门控表，这里会直接失败（fail closed 的护栏）
+    expect(unclassifiedCapabilities(desktop.map((cap) => cap.id))).toEqual([]);
+  });
+
+  it('D-02 键鼠类能力都是 L2 且有破坏性标注', () => {
+    const filler = new PowerShellBridge();
+    const byId = new Map(desktopCapabilities(filler).map((cap) => [cap.id, cap]));
+    for (const id of ['desktop.ui.act', 'desktop.input.send']) {
+      expect(byId.get(id)?.risk).toBe('L2');
+      expect(byId.get(id)?.destructive).toBe(true);
+    }
+    expect(byId.get('desktop.control.policy')?.risk).toBe('L3');
+    expect(byId.get('desktop.ui.snapshot')?.risk).toBe('L0');
   });
 
   it('D-02 窗口控制与书签写入为 L2', () => {

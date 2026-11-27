@@ -16,6 +16,14 @@ export const ERROR_CODES = [
   'COMMAND_BLOCKED',
   'STALE_REF',
   'AMBIGUOUS_TARGET',
+  'CONTROL_DENIED',
+  'USER_CONTROL',
+  'PLAN_NOT_FOUND',
+  'PLAN_EXPIRED',
+  'PLAN_MISMATCH',
+  'PLAN_BLOCKED',
+  'BACKUP_NOT_FOUND',
+  'NO_CHANGES',
   'TIMEOUT',
   'UNKNOWN_CAPABILITY',
   'INVALID_PARAMS',
@@ -48,5 +56,32 @@ export function isToolError(value: unknown): value is ToolError {
     typeof candidate.code === 'string' &&
     (ERROR_CODES as readonly string[]).includes(candidate.code) &&
     typeof candidate.message === 'string'
+  );
+}
+
+/**
+ * 领域失败载体：handler 抛出它时，ToolGate 保留错误码而不是折叠成 INTERNAL。
+ *
+ * 为什么需要：桥会把 PowerShell 的 `STALE_REF: ...` 还原成结构化错误，如果 handler
+ * 只 throw 普通 Error，审批闸只能看到 message，错误码信息就丢了。
+ */
+export class ToolFailure extends Error {
+  readonly toolError: ToolError;
+
+  constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
+    super(message);
+    this.name = 'ToolFailure';
+    this.toolError = makeError(code, message, details);
+  }
+
+  static from(error: ToolError): ToolFailure {
+    return new ToolFailure(error.code, error.message, error.details);
+  }
+}
+
+export function isToolFailure(value: unknown): value is ToolFailure {
+  return (
+    value instanceof ToolFailure ||
+    (typeof value === 'object' && value !== null && isToolError((value as { toolError?: unknown }).toolError))
   );
 }
