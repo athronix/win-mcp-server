@@ -2,6 +2,37 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-003 win-system（v0.3.0）
+
+| 项 | 内容 |
+|---|---|
+| 状态 | ✅ 完成（2026-11-26） |
+| 类型 | feat（第一个业务 server） |
+
+### 交付
+
+- 桥新增 `op=module`（双层白名单：module + function），脚本作用域 dot-source
+- `packages/core/ps/modules/system.ps1`：11 个函数（概览/服务/进程/事件日志/任务/注册表读+写带备份/启动项/网络）
+- `packages/servers`：`@win-mcp/servers` 包（ADR-011：同包 6 bin）
+  - `src/shared/runner.ts` 统一运行器
+  - `src/system/capabilities.ts`（11 能力）+ `src/system/bin.ts`
+- `docs/changes/CL-003.md`（合并版 DDD 记录）
+
+### 验证
+
+| 关卡 | 结果 |
+|---|---|
+| `npm run typecheck` | 0 error（core + servers） |
+| `npm test` | **146 passed / 13 files** |
+| 真机 | info/service.list/registry.read 返回真实数据；service.control → APPROVAL_REQUIRED；lsass 与 HKLM 写 → POLICY_DENIED |
+
+### 缺陷修正
+
+1. hashtable 字面量内不能写 `try/catch`（5 处改为先算变量）
+2. 函数内 dot-source 导致模块函数作用域丢失（改为主循环加载）
+
+---
+
 ## CL-002 PowerShell 常驻桥 + 真 AST 解析（v0.2.0）
 
 | 项 | 内容 |

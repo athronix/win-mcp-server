@@ -1,6 +1,6 @@
 # 项目目录与文件索引
 
-> 最后更新：2026-11-26 · 版本 v0.2.0
+> 最后更新：2026-11-26 · 版本 v0.3.0
 
 ## 根目录
 
@@ -14,6 +14,7 @@
 | `.dev/` | DDD 六索引 |
 | `docs/` | DDD 文档（4 阶段） |
 | `packages/core/` | `@win-mcp/core` 共享底座 |
+| `packages/servers/` | `@win-mcp/servers`：6 个业务 server（独立 bin 入口） |
 | `scripts/` | 冒烟与门禁脚本 |
 | `examples/` | 演示 server 与客户端配置 |
 
