@@ -2,6 +2,62 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-002 PowerShell 常驻桥 + 真 AST 解析（v0.2.0）
+
+| 项 | 内容 |
+|---|---|
+| 状态 | ✅ 完成（2026-11-26） |
+| 类型 | feat（新增 bridge 模块） |
+| 关联需求 | G1–G6（CONTEXT-ANALYSIS-cl002 §4） |
+
+### 交付内容
+
+**代码**
+- `packages/core/ps/ps-bridge.ps1`：NDJSON 请求循环（`ping/info/parse/invoke`）、官方 AST 解析、独立 runspace 受控执行 + 超时 Stop
+- `packages/core/src/bridge/protocol.ts`：请求编码、响应容错解析
+- `packages/core/src/bridge/bridge.ts`：`PowerShellBridge`（spawn、分帧、id 匹配、超时、崩溃重启、pwsh→powershell 回退、可注入 spawn）
+- `packages/core/src/bridge/ast.ts`：`parseWithBridge` / `analyzeCommandWithBridge` / `createBridgeClassifier` / `bridgeErrorToCode`
+- `packages/core/src/policy/engine.ts`：新增 `PolicyRequest.pathEvidence`（命令型参数改用 AST 证据）
+- `packages/core/src/approval/gate.ts`：`DynamicClassification.paths` → `pathEvidence` 贯通
+- `examples/demo-server.mjs`：`--ps` 开关启用真 AST
+
+**测试**
+- `tests/protocol.test.ts`（6）、`tests/bridge.test.ts`（10，假进程）、`tests/ast-bridge.test.ts`（12，真机）
+- `scripts/smoke-bridge.mjs`（6 项）
+- `policy.test.ts` +3、`gate.test.ts` +2（路径证据回归）
+
+**文档**
+- `docs/01-investigation/CONTEXT-ANALYSIS-cl002.md`
+- `docs/02-design/TECHNICAL-SOLUTION-bridge.md`（含 §4.4 路径证据贯通）
+- `docs/02-design/TEST-PLAN-cl002.md`
+- `docs/03-verification/TEST-REPORT-cl002.md`
+- `TECHNICAL-SOLUTION-core.md`：`PolicyRequest.pathEvidence`
+- `README.md`：`--ps` 用法、路线图
+
+### 验证结果
+
+| 关卡 | 结果 |
+|---|---|
+| `npm run build` / `typecheck` | ✅ 0 error |
+| `npm test` | **139 passed / 12 files / 0 skip** |
+| `npm run smoke` | 12/12（无回归） |
+| `npm run smoke:bridge` | **6/6** |
+| `npm run verify:docs` | 45 个关键 API 对齐 |
+| bridge 覆盖率 | 84.38% |
+
+### 实现中修正的缺陷
+
+1. `$errors` 与 PowerShell 自动变量 `$Error` 冲突 → 改名 `$errorList`
+2. PowerShell 7.6 的 `@($list[object])` 抛 "Argument types do not match" → 改 `.ToArray()`
+3. `StrictMode 2` 下访问不存在的 PSCustomObject 属性抛错 → StrictMode 1 + `PSObject.Properties` 安全读取
+4. **纯注释命令被 `POLICY_DENIED`** → `pathEvidence` 贯通（分级与策略共用同一份事实）
+
+### 已知遗留
+
+见 `docs/03-verification/TEST-REPORT-cl002.md` §7（死循环无法 Stop、执行结果未结构化、会话状态不保留、错误消息本地化、runAsAdmin 仅判级）。
+
+---
+
 ## CL-001 底座 `@win-mcp/core` v0.1.0
 
 | 项 | 内容 |

@@ -1,6 +1,6 @@
 # 项目目录与文件索引
 
-> 最后更新：2026-11-26 · 版本 v0.1.0
+> 最后更新：2026-11-26 · 版本 v0.2.0
 
 ## 根目录
 
@@ -44,34 +44,47 @@
 | `taskmgr/semaphore.ts` | 分类信号量（DESKTOP=1 等） | FR-107 |
 | `transport/gateway.ts` | 工具注册、`toCallResult`、stdio/HTTP、`PolicyControlProvider` | FR-108 |
 | `util/ids.ts` | traceId/approvalId/actionId | — |
+| `bridge/protocol.ts` | NDJSON 请求编码、响应容错解析 | CL-002 |
+| `bridge/bridge.ts` | `PowerShellBridge`（spawn/分帧/超时/重启/回退） | CL-002 |
+| `bridge/ast.ts` | `parseWithBridge` / `analyzeCommandWithBridge` / `createBridgeClassifier` | CL-002 |
 | `index.ts` | 包公开 API | — |
 
-## `packages/core/tests/`（106 条）
+## `packages/core/ps/`
+
+| 文件 | 职责 |
+|---|---|
+| `ps-bridge.ps1` | NDJSON 主循环；`ping/info/parse/invoke`；官方 AST 解析；独立 runspace 受控执行 + 超时 Stop（全英文输出，兼容 PS 5.1 编码） |
+
+## `packages/core/tests/`（139 条）
 
 | 文件 | 条数 | 覆盖 |
 |---|---|---|
 | `registry.test.ts` | 10 | R-01..R-10 |
 | `classify.test.ts` | 23 | C-01..C-23 |
-| `policy.test.ts` | 20 | P-01..P-20 |
+| `policy.test.ts` | 23 | P-01..P-23（含 pathEvidence） |
 | `approval.test.ts` | 13 | A-01..A-13 |
 | `audit.test.ts` | 6 | U-01..U-06 |
 | `guard.test.ts` | 9 | G-01..G-09 |
 | `semaphore.test.ts` | 5 | S-01..S-05 |
-| `gate.test.ts` | 14 | T-01..T-14 |
+| `gate.test.ts` | 16 | T-01..T-16 |
 | `gateway.test.ts` | 6 | G-T1..G-T6 |
+| `protocol.test.ts` | 6 | P-01..P-06（NDJSON） |
+| `bridge.test.ts` | 10 | B-01..B-10（假进程） |
+| `ast-bridge.test.ts` | 12 | R-01..R-12（真机 pwsh） |
 
 ## `scripts/`
 
 | 文件 | 用途 |
 |---|---|
 | `smoke.mjs` | P0 12 项冒烟（真实 MCP stdio 客户端 + HTTP `/health`） |
-| `verify-doc-api.mjs` | 37 个关键 API 文档-代码一致性门禁 |
+| `smoke-bridge.mjs` | CL-002 6 项桥冒烟（真机 pwsh + gate 贯通） |
+| `verify-doc-api.mjs` | 45 个关键 API 文档-代码一致性门禁 |
 
 ## `examples/`
 
 | 文件 | 用途 |
 |---|---|
-| `demo-server.mjs` | 5 能力演示 server（stdio / `--http <port>`；全部模拟，不写真实系统） |
+| `demo-server.mjs` | 5 能力演示 server（stdio / `--http <port>` / `--ps` 真 AST；全部模拟，不写真实系统） |
 | `client-config.json` | stdio 与 HTTP 客户端配置示例 |
 
 ## `docs/`
@@ -79,7 +92,11 @@
 | 文件 | 阶段 | 状态 |
 |---|---|---|
 | `01-investigation/PROJECT-OVERVIEW.md` | Phase 1 | ✅ |
+| `01-investigation/CONTEXT-ANALYSIS-cl002.md` | Phase 1（CL-002） | ✅ |
 | `02-design/REQUIREMENT-v0.1.0.md` | Phase 2.1 | ✅ |
+| `02-design/TECHNICAL-SOLUTION-bridge.md` | Phase 2.2（CL-002） | ✅ |
+| `02-design/TEST-PLAN-cl002.md` | Phase 2.3（CL-002） | ✅ |
+| `03-verification/TEST-REPORT-cl002.md` | Phase 4（CL-002） | ✅ |
 | `02-design/TECHNICAL-SOLUTION-core.md` | Phase 2.2 | ✅ |
 | `02-design/TEST-PLAN-v0.1.0.md` | Phase 2.3 | ✅ |
 | `03-verification/TEST-REPORT-v0.1.0.md` | Phase 4 | ✅ |

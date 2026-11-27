@@ -6,13 +6,20 @@
 
 ## 下一步候选
 
-**CL-002 PowerShell 常驻桥 + 真 AST 解析注入**（P0）
+**CL-003 `win-system`**（P0）
 
 | 项 | 内容 |
 |---|---|
-| 目标 | 用常驻 pwsh 子进程提供 `CommandParser`（官方 `Parser::ParseInput`）与命令执行，替换 fallback |
-| 依赖 | 底座 `parser` 注入点（已就绪） |
-| 验收 | 复杂语法（here-string、嵌套子表达式、注释）判级与 PowerShell 一致；桥异常时 `PREFLIGHT_UNAVAILABLE` fail-closed |
-| 风险 | Windows 进程管理、NDJSON 协议、自动重启 |
+| 目标 | 注册表/服务/进程/事件日志/任务计划 能力，全部经底座 gate |
+| 依赖 | 底座 gate + CL-002 桥（执行层已就绪） |
+| 验收 | 每个能力标注 L0–L3；注册表写自动备份；受保护进程不可终止；实测只读项与写审批链路 |
+| 风险 | 注册表键值类型映射、服务控制权限、事件日志解析（中英文级别）、PowerShell 输出结构化 |
 
-**CL-003 `win-system`**（P0）：注册表/服务/进程/事件日志/任务计划，全部经底座 gate。
+**CL-004 `win-shell`**（P0）
+
+| 项 | 内容 |
+|---|---|
+| 目标 | 人类可见控制台 + 密码不进 AI + 按需提权 + Git-Bash adapter |
+| 依赖 | CL-002 桥、CL-003（能力组织范式） |
+| 验收 | 密码仅在人可见控制台输入；非提权会话 `runAsAdmin` → `ADMIN_REQUIRED`；关窗即中止 |
+| 风险 | UAC 交互、控制台进程生命周期、Bash 语义差异 |

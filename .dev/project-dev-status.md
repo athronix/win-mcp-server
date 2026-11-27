@@ -1,47 +1,48 @@
 # 项目开发状态
 
-> 版本：v0.1.0 · 更新：2026-11-26 · 当前 CL：无（CL-001 已完成）
+> 版本：v0.2.0 · 更新：2026-11-26 · 当前 CL：无（CL-002 已完成）
 
 ## 总体进度
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
-| Phase 1 调研 | ✅ 完成 | PROJECT-OVERVIEW |
-| Phase 2 设计 | ✅ 完成 | 需求 / 技术方案 / 测试方案 |
-| Phase 3 实现 | ✅ 完成 | 底座 8 模块 + 网关 |
-| Phase 4 验证 | ✅ 完成 | 106 单测 + 12 冒烟 + 覆盖率 |
-| Phase 5 迭代 | ✅ 无返工 | 实现中修正 4 个缺陷 |
-| Phase 6 配套 | ✅ 完成 | 部署指南 + 用户指南 + README |
-| Phase 7 交付 | ✅ 完成 | 索引同步 + git 提交 |
+| Phase 1 调研 | ✅ | PROJECT-OVERVIEW、CONTEXT-ANALYSIS-cl002 |
+| Phase 2 设计 | ✅ | core / bridge 技术方案、两份测试方案 |
+| Phase 3 实现 | ✅ | 底座 10 模块 + 网关 + PS 桥 |
+| Phase 4 验证 | ✅ | 139 测试 + 12 底座冒烟 + 6 桥冒烟 |
+| Phase 5 迭代 | ✅ | CL-001 修 4 缺陷、CL-002 修 4 缺陷 |
+| Phase 6 配套 | ✅ | 部署/用户指南 + README |
+| Phase 7 交付 | ✅ | 索引同步 + 原子提交 |
 
 ## 里程碑
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | DDD 基线文档与六索引 | ✅ |
-| M1 | contracts/registry/classify/policy 编译通过 | ✅ |
-| M2 | 审批/审计/守卫/并发可用 | ✅ |
-| M3 | MCP 网关 stdio + HTTP 跑通 | ✅ |
-| M4 | 单测全绿 + 冒烟 12/12 | ✅ 106 / 12 |
+| M1 | contracts/registry/classify/policy | ✅ |
+| M2 | approval/audit/guard/taskmgr | ✅ |
+| M3 | MCP 网关 stdio + HTTP | ✅ |
+| M4 | 单测全绿 + 冒烟 12/12 | ✅ |
 | M5 | 配套文档 + 索引同步 + 提交 | ✅ |
+| M6 | PowerShell 桥 + 真 AST（CL-002） | ✅ |
 
 ## 质量基线（当前）
 
 | 指标 | 值 |
 |---|---|
-| 单元/集成测试 | 106 passed / 9 files / 0 skip |
-| 冒烟 | 12/12 |
+| 单元/集成测试 | **139 passed / 12 files / 0 skip** |
+| 底座冒烟 | 12/12 |
+| 桥冒烟 | 6/6 |
 | 类型检查 | 0 error（strict） |
-| 关键 API 文档一致性 | 37/37 |
-| 核心模块覆盖率 | classify 93.5% · policy 97.3% · approval 91.0% · audit 96.8% · guard 92.0% · taskmgr 100% |
+| 关键 API 文档一致性 | 45/45 |
+| 核心模块覆盖率 | classify 93.5% · policy 96.9% · approval 92.2% · audit 96.8% · bridge 84.4% · guard 92.0% · taskmgr 100% |
 
 ## Backlog（按优先级）
 
 | CL | 内容 | 优先级 | 依赖 |
 |---|---|---|---|
-| CL-002 | PowerShell 常驻桥 + 真 AST 解析注入 | P0 | 底座 `parser` 注入点 |
-| CL-003 | `win-system`（注册表/服务/进程/事件日志/任务计划） | P0 | CL-002 |
-| CL-004 | `win-shell`（可见控制台 + Git-Bash adapter） | P0 | CL-002 |
+| CL-003 | `win-system`（注册表/服务/进程/事件日志/任务计划） | P0 | 底座 + CL-002 |
+| CL-004 | `win-shell`（可见控制台 + Git-Bash adapter） | P0 | CL-002、CL-003 |
 | CL-005 | `win-apps`（winget adapter + planId 分支） | P1 | CL-003 |
 | CL-006 | `win-resource`（指标 + 清理 + 调优回滚） | P1 | CL-003 |
 | CL-007 | `win-desktop`（UIA + ref + 门控） | P2 | CL-004 |
@@ -53,7 +54,9 @@
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| 真 AST 未接，fallback 偏保守 | 复杂命令多一次审批 | CL-002 优先解决 |
-| 默认路径白名单不含 `D:\Users\**` | 写操作被 `pathAllowlist:miss` 拒绝 | 部署指南 4.1 明确要求显式加白 |
-| 单进程审批状态 | 多实例不共享凭证 | 设计上限定单进程网关，多实例需外部存储 |
-| HTTP 分支单测覆盖低 | 异常/并发路径风险 | 冒烟覆盖主路径；CL-002 补集成测试 |
+| runspace `Stop()` 不打断同步死循环 | 桥可能卡死 | Node 侧超时杀进程兜底（已实现） |
+| 默认路径白名单不含 `D:\Users\**` | 写操作被 `pathAllowlist:miss` 拒绝 | 部署指南 4.1 要求显式加白 |
+| 单进程审批状态 | 多实例不共享凭证 | 设计限定单进程网关 |
+| 执行结果未结构化 | 上层需自行解析文本 | 各 server CL 按 cmdlet 适配 |
+| 错误消息随系统语言 | 文案匹配不可靠 | 只依赖错误码，不匹配文案 |
+| `runAsAdmin` 仅判级 | 尚未真正提权 | CL-004 |
