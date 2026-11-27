@@ -2,6 +2,17 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-011 win-desktop：UIA 语义树 + 受控键鼠 + 桌面门控（v0.8.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `desktop.ui.snapshot`(L0) / `desktop.ui.act`(L2) / `desktop.input.send`(L2) / `desktop.control.state`(L0) / `desktop.control.policy`(L3) |
+| 新模块 | core `desktop/{control-policy,consent,gate,io,ref}.ts`、`bridge/errors.ts`；ps `modules/desktop-uia.ps1`、`ps/consent-dialog.ps1` |
+| 参考来源 | CursorTouch 门控三档+倒计时同意；agent-desktop ref 语义+Chromium settle；FlaUI-MCP 语义树渲染+模式降级 |
+| 关键设计 | 未登记能力按 direct（fail closed）；控制状态查询永免检；对话框挂起 → CONTROL_DENIED（与上游故意不同） |
+| 修复缺陷 | ArrayList.Add 返回值污染递归、Rect.Empty 的 -Infinity 强转崩溃、`$matches` 撞自动变量、门控/审批顺序 |
+| 验证 | 221 测试 / 18 文件；smoke:desktop 11/11 真机；底座 12/12、桥 6/6 无回归 |
+
 ## CL-004 win-shell（v0.4.0）
 
 | 项 | 内容 |
