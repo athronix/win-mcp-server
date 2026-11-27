@@ -319,6 +319,66 @@ export function desktopCapabilities(bridge: PowerShellBridge): CapabilitySpec[] 
       },
     },
     {
+      id: 'desktop.ui.watch',
+      name: '跨请求等待（arm/status）',
+      description:
+        '先 arm 一次记住条件，之后反复 status 查询——不受单次请求 60 秒上限约束，适合等下载/编译/长任务（L0 只读）。' +
+        '每次 status 只做一次轻量扫描（命中早退），mat条件满足时自动移除并返回可用 ref。' +
+        '注意：handle=-1 表示整个桌面，扫描量远大于单窗口，能给出具体窗口句柄就别用 -1。' +
+        '（本机实测 .NET UIA 事件回调不触发，所以这里是"按需重查"而非事件推送，但语义与事件订阅等效且不会卡死。）',
+      risk: 'L0',
+      timeoutMs: 60_000,
+      inputSchema: {
+        action: z.enum(['arm', 'status', 'cancel', 'list']).describe('arm 建立 / status 查询 / cancel 取消 / list 列出'),
+        watchId: z.string().optional().describe('status/cancel 必填（arm 返回）'),
+        handle: z.number().int().optional().describe('窗口句柄，省略=前台窗口，-1=整个桌面（昂贵）'),
+        text: z.string().optional().describe('元素名称包含该字符串'),
+        role: z.string().optional().describe('角色精确匹配，如 window / button'),
+        automationId: z.string().optional().describe('AutomationId 精确匹配'),
+        disappear: z.boolean().optional().describe('true 表示等条件消失'),
+        maxNodes: z.number().int().min(20).max(3000).optional().describe('每轮扫描上限，默认 400'),
+        maxDepth: z.number().int().min(1).max(20).optional().describe('每轮最大深度，默认 8'),
+        ttlMinutes: z.number().int().min(1).max(240).optional().describe('watch 存活时长，默认 30 分钟'),
+      },
+      async handler(params) {
+        const action = str(params.action, 'status');
+        if (action === 'list') {
+          return { data: await guard(call('Get-UiWatchList')) };
+        }
+        if (action === 'cancel') {
+          return { data: await guard(call('Stop-UiWatch', { WatchId: str(params.watchId) })) };
+        }
+        if (action === 'status') {
+          const watchId = str(params.watchId);
+          if (watchId.length === 0) {
+            throw new ToolFailure('INVALID_PARAMS', 'action=status 需要 watchId（来自 arm 的返回值）');
+          }
+          return { data: await guard(call('Get-UiWatchStatus', { WatchId: watchId })) };
+        }
+
+        // arm
+        const armed = await guard(
+          call('Start-UiWatch', {
+            Handle: num(params.handle, 0),
+            Text: str(params.text),
+            Role: str(params.role),
+            AutomationId: str(params.automationId),
+            Disappear: bool(params.disappear, false),
+            MaxNodes: num(params.maxNodes, 400),
+            MaxDepth: num(params.maxDepth, 8),
+            TtlMinutes: num(params.ttlMinutes, 30),
+          }),
+        );
+        const armedData = armed as { alreadyMet?: boolean; watchId?: string };
+        return {
+          data: armedData,
+          ...(armedData.alreadyMet === true
+            ? { warnings: ['条件在 arm 时就已满足：直接调 action=status 取 ref，或改用 desktop.ui.wait'] }
+            : {}),
+        };
+      },
+    },
+    {
       id: 'desktop.control.state',
       name: '桌面控制状态',
       description:

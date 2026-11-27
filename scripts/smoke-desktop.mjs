@@ -5,6 +5,7 @@
  * 只做只读动作（快照、getText、读状态），绝不点击或注入按键——
  * 冒烟不应该干扰用户正在用的桌面。
  */
+import { spawn } from 'node:child_process';
 import { PowerShellBridge, createSpawnIndicator } from '../packages/core/dist/index.js';
 
 const results = [];
@@ -111,6 +112,48 @@ try {
     check('DS-12', '等待条件命中并返回可用 ref', false, '无可用窗口');
     check('DS-13', '等待超时返回 TIMEOUT（不是静默失败）', false, '无可用窗口');
   }
+
+  // ---------- CL-017: 跨请求 watch（不依赖事件，等一个真实出现的窗口） ----------
+  spawn('taskkill', ['/IM', 'notepad.exe', '/F'], { stdio: 'ignore' });
+  await new Promise((resolve) => setTimeout(resolve, 700));
+
+  let armed = null;
+  let watchMiss = null;
+  let watchHit = null;
+  try {
+    armed = await mod('Start-UiWatch', { Handle: -1, Text: 'Notepad', MaxDepth: 2, MaxNodes: 200, TtlMinutes: 3 });
+    watchMiss = await mod('Get-UiWatchStatus', { WatchId: armed.watchId });
+    if (armed.alreadyMet !== true) {
+      spawn('notepad.exe', [], { detached: true, stdio: 'ignore' }).unref();
+      for (let i = 0; i < 20; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const status = await mod('Get-UiWatchStatus', { WatchId: armed.watchId });
+        if (status.matched === true) {
+          watchHit = status;
+          break;
+        }
+      }
+    }
+  } finally {
+    spawn('taskkill', ['/IM', 'notepad.exe', '/F'], { stdio: 'ignore' }).unref();
+  }
+
+  check(
+    'DS-15',
+    'watch arm 后可查询未命中状态（不阻塞请求）',
+    armed !== null && watchMiss !== null && watchMiss.matched === false && typeof watchMiss.checks === 'number',
+    `alreadyMet=${String(armed?.alreadyMet)} checks=${String(watchMiss?.checks)}`,
+  );
+  check(
+    'DS-16',
+    '真实窗口出现后 status 命中并给出可用 ref',
+    watchHit !== null && watchHit.matched === true && /^@s\d+:e\d+$/.test(String(watchHit.ref ?? '')),
+    watchHit === null ? '8 秒内未命中' : `waited=${watchHit.waitedMs}ms checks=${watchHit.checks} ref=${String(watchHit.ref)}`,
+  );
+
+  const armedAgain = await mod('Start-UiWatch', { Handle: -1, Text: 'zzz-never-matches', MaxDepth: 2, MaxNodes: 100 });
+  const cancelled = await mod('Stop-UiWatch', { WatchId: armedAgain.watchId });
+  check('DS-17', 'watch 可显式取消', cancelled.stopped === true, JSON.stringify(cancelled));
 
   const indicator = createSpawnIndicator({ onError: () => undefined });
   const handle = indicator.show(1);

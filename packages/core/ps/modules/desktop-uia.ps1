@@ -226,6 +226,11 @@ function Get-UiaWindowRoot {
     param([int64]$Handle)
 
     Initialize-Uia
+    # -1 明确表示"整个桌面根元素"（自动化里常用，但必须是显式请求：
+    # 桌面根的扫描量远大于单窗口，不能作为默认值）
+    if ($Handle -eq -1) {
+        return [System.Windows.Automation.AutomationElement]::RootElement
+    }
     if ($Handle -ne 0) {
         $hWnd = [IntPtr]::new($Handle)
         if (-not [WinMcpDesktop]::IsWindow($hWnd)) { throw "INVALID_PARAMS: window handle $Handle 不存在" }
@@ -272,32 +277,10 @@ function Get-RenderHostHandles {
     return $script:RenderHostScratch
 }
 
-# Chromium/Electron 窗口在没有任何辅助技术连接时只暴露一个空的
-# "Chrome Legacy Window"。渲染宿主 HWND 自己提供 UIA 子树，所以快照优先
-# 拿到它作为根（agent-desktop 把这一步叫 Chromium settle）。
-function Enable-RendererAccessibility {
-    param([IntPtr]$WindowHandle)
+# 注：这里曾尝试"请求 MSAA 对象 + 以渲染宿主为根做 FindAll"来激活 Electron 的
+# 可访问性。实测两个动作都会卡住数十秒且最终拿到 0 个子节点，因此整段删除。
+# Electron 场景请用 --force-renderer-accessibility 启动，或走 win-browser 的 CDP。
 
-    $handles = Get-RenderHostHandles -WindowHandle $WindowHandle
-    if ($handles.Count -eq 0) { return 0 }
-    if ($null -eq $script:RendererHolders) { $script:RendererHolders = @{} }
-
-    $triggered = 0
-    foreach ($handle in $handles) {
-        $key = ([int64]$handle).ToString()
-        if ($script:RendererHolders.ContainsKey($key)) {
-            $triggered = $triggered + 1
-            continue
-        }
-        $accessible = [WinMcpInput]::RequestRendererAccessibility($handle)
-        if ($null -ne $accessible) {
-            # Hold the MSAA object so the renderer keeps its tree enabled.
-            $script:RendererHolders[$key] = $accessible
-        }
-        $triggered = $triggered + 1
-    }
-    return $triggered
-}
 
 function Get-UiaWindowMeta {
     param($Root)
@@ -436,44 +419,29 @@ function Get-UiTree {
     if ($MaxNodes -gt 3000) { $MaxNodes = 3000 }
 
     $root = Get-UiaWindowRoot -Handle $Handle
-    $meta = Get-UiaWindowMeta -Root $root
+    # 桌面根的 NativeWindowHandle 是无意义的值（实测会返回某个 csrss 窗口句柄），
+    # 用它去做 Chromium settle 会枚举到一堆无关子窗口，必须显式短路。
+    $isDesktopRoot = ($Handle -eq -1)
+    $meta = if ($isDesktopRoot) {
+        [ordered]@{ handle = [int64]0; title = '(entire desktop)'; processId = 0; processName = '' }
+    } else {
+        Get-UiaWindowMeta -Root $root
+    }
 
-    # Chromium/Electron: the top-level window exposes only an empty legacy pane;
-    # the render host HWND owns the real subtree, so walk that instead.
+    # Chromium/Electron: 顶层窗口只暴露一个空的 "Chrome Legacy Window"。
+    # 我们只**探测**（按窗口类名，很便宜）用于告警，不去请求 MSAA、也不拿渲染宿主
+    # 当快照根 —— 实测这两步会卡住数十秒（Electron 渲染进程不响应 UIA 树请求），
+    # 那个代价换不来可用结果，正确做法见 warnings 里指向的 CDP 通道。
     $rendererTriggers = 0
     $rendererRoot = 'window'
     $renderHostCount = 0
     $walkRoot = $root
-    if ($meta.handle -ne 0 -and $EnableRendererSettle) {
-        $windowHandle = [IntPtr]::new([int64]$meta.handle)
+    if ($meta.handle -ne 0) {
         try {
-            $rendererTriggers = Enable-RendererAccessibility -WindowHandle $windowHandle
+            $renderHosts = Get-RenderHostHandles -WindowHandle ([IntPtr]::new([int64]$meta.handle))
+            $renderHostCount = $renderHosts.Count
         } catch {
-            $rendererTriggers = 0
-        }
-        try { $renderHosts = Get-RenderHostHandles -WindowHandle $windowHandle } catch { $renderHosts = New-Object System.Collections.ArrayList }
-        $renderHostCount = $renderHosts.Count
-        if ($renderHosts.Count -gt 0) {
-            # The MSAA request above is best-effort: even when it fails the render
-            # host HWND often serves a full UIA subtree, so always try it.
-            Start-Sleep -Milliseconds 250
-            try {
-                foreach ($renderHost in $renderHosts) {
-                    $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($renderHost)
-                    $probe = $candidate.FindAll(
-                        [System.Windows.Automation.TreeScope]::Descendants,
-                        [System.Windows.Automation.Condition]::TrueCondition
-                    )
-                    if ($probe.Count -gt 0) {
-                        $walkRoot = $candidate
-                        $rendererRoot = 'render-host'
-                        break
-                    }
-                }
-            } catch {
-                $walkRoot = $root
-                $rendererRoot = 'window'
-            }
+            $renderHostCount = 0
         }
     }
 
@@ -1129,11 +1097,6 @@ function Wait-UiCondition {
     $root = Get-UiaWindowRoot -Handle $Handle
     $meta = Get-UiaWindowMeta -Root $root
 
-    # Chromium/Electron 需要一次 settle，否则整棵树都是空的，wait 会一直等外壳
-    if ($meta.handle -ne 0) {
-        try { [void](Enable-RendererAccessibility -WindowHandle ([IntPtr]::new([int64]$meta.handle))) } catch { }
-    }
-
     $started = [DateTime]::UtcNow
     $polls = 0
     $lastVisited = 0
@@ -1185,4 +1148,225 @@ function Wait-UiCondition {
 
         Start-Sleep -Milliseconds $PollMs
     }
+}
+
+# ---------------------------------------------------------------------------
+# CL-017: cross-request watch (no events required)
+# ---------------------------------------------------------------------------
+# 背景（实测记录）：.NET 的 UIA 事件在本机环境下不回调 —— STA 进程 + WinForms
+# 消息泵 + C# 计数器委托都试过，10 秒内 hits 始终为 0（覆盖"桌面根作用域"与
+# "窗口作用域 + 真实菜单弹出"两种触发）。因此这里不依赖事件，而是提供
+# "arm 一次 + 反复 status" 的跨请求等待：不受单次请求 60s 上限约束，
+# 每次 status 只做一次轻量扫描（命中早退，实测 ~86ms/窗口）。
+
+$script:UiWatches = @{}
+$script:UiWatchLimit = 32
+
+# 轻量扫描（只读 ControlType/Name/AutomationId，命中即返回）：
+# watch 每次 status 都调它，必须便宜；完整快照只在命中后做一次。
+function Find-UiQuick {
+    param($Root, [string]$Text, [string]$Role, [string]$AutomationId, [int]$MaxNodes, [int]$MaxDepth)
+
+    $context = @{
+        Text = $Text; Role = $Role; AutomationId = $AutomationId
+        MaxNodes = $MaxNodes; MaxDepth = $MaxDepth
+        Visited = 0; Truncated = $false
+    }
+    $found = Find-UiElementFast -Element $Root -Depth 0 -Context $context
+    return [ordered]@{ element = $found; visited = $context.Visited }
+}
+
+function Remove-ExpiredUiWatches {
+    $now = [DateTime]::UtcNow
+    $expired = @()
+    foreach ($key in $script:UiWatches.Keys) {
+        if ($now -gt $script:UiWatches[$key].ExpiresAt) { $expired += $key }
+    }
+    foreach ($key in $expired) { $script:UiWatches.Remove($key) }
+}
+
+# 从命中元素向上找所属顶层窗口：快照要在这个窗口范围内做，
+# 否则 -1（整个桌面）会把所有窗口的子树都走一遍——实测可超过 30 秒。
+function Get-UiOwnerWindowHandle {
+    param($Element)
+
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $cursor = $Element
+    for ($i = 0; $i -lt 24; $i++) {
+        $handle = 0
+        try { $handle = [int64]$cursor.Current.NativeWindowHandle } catch { $handle = 0 }
+        $role = 'generic'
+        try { $role = ConvertTo-UiaRole $cursor.Current.ControlType } catch { $role = 'generic' }
+        if ($role -eq 'window' -and $handle -ne 0) { return $handle }
+        $parent = $null
+        try { $parent = $walker.GetParent($cursor) } catch { $parent = $null }
+        if ($null -eq $parent) {
+            if ($handle -ne 0) { return $handle }
+            return 0
+        }
+        $cursor = $parent
+    }
+    return 0
+}
+
+function Start-UiWatch {
+    param(
+        [int64]$Handle = 0,
+        [string]$Text = '',
+        [string]$Role = '',
+        [string]$AutomationId = '',
+        [bool]$Disappear = $false,
+        [int]$MaxNodes = 400,
+        [int]$MaxDepth = 8,
+        [int]$TtlMinutes = 30
+    )
+
+    if ([string]::IsNullOrEmpty($Text) -and [string]::IsNullOrEmpty($Role) -and [string]::IsNullOrEmpty($AutomationId)) {
+        throw 'INVALID_PARAMS: watch 至少需要一个条件（text / role / automationId）'
+    }
+    if ($TtlMinutes -lt 1) { $TtlMinutes = 1 }
+    if ($TtlMinutes -gt 240) { $TtlMinutes = 240 }
+
+    Initialize-Uia
+    $root = Get-UiaWindowRoot -Handle $Handle
+    $meta = Get-UiaWindowMeta -Root $root
+
+    Remove-ExpiredUiWatches
+    while ($script:UiWatches.Count -ge $script:UiWatchLimit) {
+        $oldestKey = $null
+        $oldestAt = [DateTime]::MaxValue
+        foreach ($key in $script:UiWatches.Keys) {
+            if ($script:UiWatches[$key].CreatedAt -lt $oldestAt) {
+                $oldestAt = $script:UiWatches[$key].CreatedAt
+                $oldestKey = $key
+            }
+        }
+        if ($null -eq $oldestKey) { break }
+        $script:UiWatches.Remove($oldestKey)
+    }
+
+    $watchId = [guid]::NewGuid().ToString()
+    $script:UiWatches[$watchId] = @{
+        Id           = $watchId
+        Root         = $root
+        Handle       = $Handle
+        Meta         = $meta
+        Text         = $Text
+        Role         = $Role
+        AutomationId = $AutomationId
+        Disappear    = $Disappear
+        MaxNodes     = $MaxNodes
+        MaxDepth     = $MaxDepth
+        CreatedAt    = [DateTime]::UtcNow
+        ExpiresAt    = [DateTime]::UtcNow.AddMinutes($TtlMinutes)
+        Checks       = 0
+    }
+
+    $probe = Find-UiQuick -Root $root -Text $Text -Role $Role -AutomationId $AutomationId -MaxNodes $MaxNodes -MaxDepth $MaxDepth
+    $script:UiWatches[$watchId].Checks = 1
+    $satisfied = if ($Disappear) { $null -eq $probe.element } else { $null -ne $probe.element }
+
+    [ordered]@{
+        watchId      = $watchId
+        window       = $meta
+        condition    = [ordered]@{ text = $Text; role = $Role; automationId = $AutomationId; disappear = $Disappear }
+        alreadyMet   = $satisfied
+        visited      = $probe.visited
+        expiresAt    = $script:UiWatches[$watchId].ExpiresAt.ToString('o')
+        nextStep     = '反复调用 desktop.ui.watch { action: "status", watchId } 直到 matched=true；用完 action: "cancel"'
+    }
+}
+
+function Get-UiWatchStatus {
+    param([Parameter(Mandatory)][string]$WatchId)
+
+    $watch = $script:UiWatches[$WatchId]
+    if ($null -eq $watch) {
+        throw "INVALID_PARAMS: 未知 watchId '$WatchId'（可能已过期或被取消）"
+    }
+    if ([DateTime]::UtcNow -gt $watch.ExpiresAt) {
+        $script:UiWatches.Remove($WatchId)
+        throw "TIMEOUT: watch $WatchId 已过期（超过 TTL），请重新 arm"
+    }
+
+    $watch.Checks = $watch.Checks + 1
+    $probe = Find-UiQuick -Root $watch.Root -Text $watch.Text -Role $watch.Role -AutomationId $watch.AutomationId -MaxNodes $watch.MaxNodes -MaxDepth $watch.MaxDepth
+    $satisfied = if ($watch.Disappear) { $null -eq $probe.element } else { $null -ne $probe.element }
+    $waitedMs = [int]([DateTime]::UtcNow - $watch.CreatedAt).TotalMilliseconds
+
+    if (-not $satisfied) {
+        return [ordered]@{
+            watchId  = $WatchId
+            matched  = $false
+            waitedMs = $waitedMs
+            checks   = $watch.Checks
+            visited  = $probe.visited
+            window   = $watch.Meta
+        }
+    }
+
+    $script:UiWatches.Remove($WatchId)
+
+    $result = [ordered]@{
+        watchId   = $WatchId
+        matched   = $true
+        waitedMs  = $waitedMs
+        checks    = $watch.Checks
+        visited   = $probe.visited
+        window    = $watch.Meta
+        condition = if ($watch.Disappear) { 'disappear' } else { 'appear' }
+    }
+
+    if (-not $watch.Disappear -and $null -ne $probe.element) {
+        # 优先在命中元素所属的窗口里做快照；watch 如果是 -1（桌面根），
+        # 直接用桌面根会退化成"扫全桌面"，实测能超过 30 秒。
+        $snapshotHandle = $watch.Handle
+        if ($snapshotHandle -le 0) {
+            $ownerHandle = Get-UiOwnerWindowHandle -Element $probe.element
+            if ($ownerHandle -gt 0) { $snapshotHandle = $ownerHandle }
+        }
+        $snapshot = Get-UiTree -Handle $snapshotHandle -MaxDepth $watch.MaxDepth -MaxNodes ([Math]::Max($watch.MaxNodes, 600)) -EnableRendererSettle $false
+        $matchedNode = $null
+        foreach ($node in $snapshot.nodes) {
+            if (Test-UiNodeMatch -Node $node -Text $watch.Text -Role $watch.Role -AutomationId $watch.AutomationId) {
+                $matchedNode = $node
+                break
+            }
+        }
+        $result.snapshotId = $snapshot.snapshotId
+        $result.ref = if ($null -ne $matchedNode) { [string]$matchedNode.ref } else { $null }
+        $result.node = $matchedNode
+    }
+
+    return $result
+}
+
+function Stop-UiWatch {
+    param([Parameter(Mandatory)][string]$WatchId)
+
+    if (-not $script:UiWatches.ContainsKey($WatchId)) {
+        return [ordered]@{ watchId = $WatchId; stopped = $false; reason = 'not found (already matched or expired)' }
+    }
+    $script:UiWatches.Remove($WatchId)
+    [ordered]@{ watchId = $WatchId; stopped = $true }
+}
+
+function Get-UiWatchList {
+    Remove-ExpiredUiWatches
+    $items = New-Object System.Collections.ArrayList
+    foreach ($key in $script:UiWatches.Keys) {
+        $watch = $script:UiWatches[$key]
+        [void]$items.Add([ordered]@{
+            watchId      = $watch.Id
+            window       = $watch.Meta
+            text         = $watch.Text
+            role         = $watch.Role
+            automationId = $watch.AutomationId
+            disappear    = $watch.Disappear
+            checks       = $watch.Checks
+            createdAt    = $watch.CreatedAt.ToString('o')
+            expiresAt    = $watch.ExpiresAt.ToString('o')
+        })
+    }
+    [ordered]@{ items = @($items.ToArray()); count = $items.Count }
 }

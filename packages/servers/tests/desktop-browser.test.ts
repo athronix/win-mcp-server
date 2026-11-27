@@ -79,11 +79,11 @@ afterAll(async () => {
 });
 
 describe('CL-007/008 能力定义', () => {
-  it('D-01 desktop 11 个、browser 16 个，ID 三段式；桌面门控表覆盖全部 desktop 能力', () => {
+  it('D-01 desktop 12 个、browser 16 个，ID 三段式；桌面门控表覆盖全部 desktop 能力', () => {
     const filler = new PowerShellBridge();
     const desktop = desktopCapabilities(filler);
     const browser = browserCapabilities(filler);
-    expect(desktop).toHaveLength(11);
+    expect(desktop).toHaveLength(12);
     expect(browser).toHaveLength(16);
     for (const cap of [...desktop, ...browser]) {
       expect(cap.id).toMatch(/^(desktop|browser)\.[a-z-]+\.[a-z-]+$/);

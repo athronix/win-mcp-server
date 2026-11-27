@@ -47,7 +47,7 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 | `win-shell` | `node packages/servers/dist/shell/bin.js` | 4 | ✅ v0.4.0 |
 | `win-apps` | `node packages/servers/dist/apps/bin.js` | 8 | ✅ v0.10.0（plan/apply） |
 | `win-resource` | `node packages/servers/dist/resource/bin.js` | 9 | ✅ v0.11.0（含调优回滚） |
-| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 11 | ✅ v0.12.0（UIA + 键鼠 + 门控 + wait） |
+| `win-desktop` | `node packages/servers/dist/desktop/bin.js` | 12 | ✅ v0.14.0（UIA + 键鼠 + 门控 + wait/watch） |
 | `win-browser` | `node packages/servers/dist/browser/bin.js` | 16 | ✅ v0.13.0（书签 + CDP + wait + attach） |
 
 system 能力：`system.info.get`、`service.list/control`、`process.list/terminate`、`eventlog.query`、`task.list`、`registry.read/write`、`startup.list`、`network.get`。
@@ -108,6 +108,7 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | CL-014 | 资源调优：声明式目录 + 快照 + 一键回滚 | ✅ |
 | CL-015 | 等待机制（UIA / CDP）+ 门控视觉指示器 | ✅ |
 | CL-016 | CDP attach 复用登录态 + 服务类调优项 + winget 精确已装检测 | ✅ |
+| CL-017 | 跨请求 watch（arm/status）+ 移除会卡死的事件/渲染宿主探测 | ✅ |
 
 ## 文档
 

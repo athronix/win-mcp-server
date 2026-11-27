@@ -2,7 +2,7 @@
 import { runServer } from '../shared/runner.js';
 import { desktopCapabilities } from './capabilities.js';
 
-const VERSION = '0.12.0';
+const VERSION = '0.14.0';
 
 const INSTRUCTIONS = [
   'win-mcp-desktop：桌面操作（截图 / 窗口 / 剪贴板 / UIA 语义树 / 受控键鼠 / 桌面门控）。',
@@ -15,6 +15,9 @@ const INSTRUCTIONS = [
   'desktop.control.policy 是 L3 强制人工审批：放宽门控等于允许 AI 静默干扰用户，不要代用户决定。',
   '别用反复快照来"等"：desktop.ui.wait 在服务端等条件成立（text/role/automationId，含 disappear），命中直接给你可用 ref，超时抛 TIMEOUT。',
   '门控租约生效期间屏幕边缘会出现琥珀色指示器（WIN_MCP_DESKTOP_INDICATOR=0 可关闭）；它只是提示，不拦截任何操作。',
+  '要等很久（下载/编译/长任务）用 desktop.ui.watch：arm 一次记条件，之后反复 status 查（不受 60 秒请求上限约束），命中返回可用 ref 并自动移除。',
+  'desktop.ui.watch 的 handle=-1 表示整个桌面，扫描量远大于单窗口；能拿到具体窗口句柄就别用 -1。',
+  '本 server 的等待是"按需重查"而非事件推送（.NET UIA 事件在本机不回调，已实测），但语义等效且不会卡死。',
   '截屏返回 PNG 文件路径（在 %TEMP% 下），不是 base64。',
 ].join('');
 

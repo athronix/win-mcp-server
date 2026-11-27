@@ -72,7 +72,11 @@ $script:ModuleWhitelist = @{
         'Send-UiInput',
         'Get-ControlState',
         'Set-ControlPolicy',
-        'Wait-UiCondition'
+        'Wait-UiCondition',
+        'Start-UiWatch',
+        'Get-UiWatchStatus',
+        'Stop-UiWatch',
+        'Get-UiWatchList'
     )
     'browser' = @(
         'Get-BrowserProfiles',
