@@ -2,6 +2,18 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-013 计划与回滚：planId 三分支 + backupId 逆序恢复（v0.10.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `apps.winget.plan`(L1) / `apps.winget.apply`(L2) / `system.backup.list`(L0) / `system.backup.restore`(L2) |
+| 新模块 | core `plan/store.ts`（规范化指纹 + 一次性 + TTL + LRU）、servers `apps/plan.ts`（三分支纯函数） |
+| PS 新增 | `New-SettingsBackup` / `Restore-SettingsBackup` / `Get-SettingsBackups` / `Get-WingetInstalledState` |
+| 参考来源 | winutil-cn plans.mjs + worker-core.ps1（GUID-only / 逆序恢复 / 精确还原不存在） |
+| 关键设计 | PLAN_MISMATCH 不消耗计划；blocked 整份拒绝；no-changes 不算失败；备份只接受 GUID |
+| 修复缺陷 | system 域 handler 未走 guard 导致领域错误码退化成 INTERNAL |
+| 验证 | 272 测试 / 21 文件；smoke:plan 14/14（真实 winget + 真实注册表往返） |
+
 ## CL-012 win-browser：CDP 通道（v0.9.0）
 
 | 项 | 内容 |
