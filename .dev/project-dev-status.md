@@ -1,6 +1,6 @@
 # 项目开发状态
 
-> 版本：v0.6.0 · 更新：2026-11-26 · 当前 CL：无（CL-007/008 已完成）
+> 版本：v0.7.0 · 更新：2026-11-26 · 当前 CL：无（CL-009/010 已完成，全部计划 CL 结束）
 
 ## 总体进度
 
@@ -29,6 +29,7 @@
 | M8 | win-shell 双命令通道（CL-004） | ✅ |
 | M9 | win-apps + win-resource（CL-005/006） | ✅ |
 | M10 | win-desktop + win-browser（CL-007/008） | ✅ |
+| M11 | 6 Skill bundle + 接入包（CL-009/010） | ✅ |
 
 ## 质量基线（当前）
 
@@ -45,9 +46,9 @@
 
 | CL | 内容 | 优先级 | 依赖 |
 |---|---|---|---|
-| CL-009 | 6 个 Skill bundle + 接入包 | P2 | 全部 server |
-| CL-009 | 6 个 Skill bundle + 接入包 | P2 | 全部 server |
-| CL-009 | 6 个 Skill bundle + 接入包 | P2 | 全部 server |
+| — | 计划内 CL 已全部完成 | — | — |
+| — | 计划内 CL 已全部完成 | — | — |
+| — | 计划内 CL 已全部完成 | — | — |
 | CL-006 | `win-resource`（指标 + 清理 + 调优回滚） | P1 | CL-003 |
 | CL-007 | `win-desktop`（UIA + ref + 门控） | P2 | CL-004 |
 | CL-008 | `win-browser`（CDP + 书签自研 + guard） | P2 | — |
