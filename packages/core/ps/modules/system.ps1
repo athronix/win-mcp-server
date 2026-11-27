@@ -288,19 +288,11 @@ function Set-RegistryValue {
         }
     }
 
-    if (-not (Test-Path -LiteralPath $script:BackupRoot)) {
-        New-Item -ItemType Directory -Path $script:BackupRoot -Force | Out-Null
-    }
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
-    $backupPath = Join-Path $script:BackupRoot "reg-$stamp.json"
-    $backup = [ordered]@{
-        capturedAt = (Get-Date).ToString('o')
-        path       = $Path
-        name       = $Name
-        previous   = $previous
-        requested  = [ordered]@{ value = $Value; type = $kind }
-    }
-    ($backup | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $backupPath -Encoding UTF8
+    # 统一走 GUID 备份（CL-013）：恢复入口只接受 backupId，不接受路径
+    $entryJson = (@([ordered]@{ kind = 'registry'; path = $Path; name = $Name }) | ConvertTo-Json -Depth 4 -Compress)
+    $backup = New-SettingsBackup -Operation 'registry.write' -EntriesJson $entryJson
+    $backupId = [string]$backup.backupId
+    $backupPath = [string]$backup.path
 
     if ($kind -eq 'DWord' -or $kind -eq 'QWord') {
         Set-ItemProperty -LiteralPath $Path -Name $Name -Value ([int64]$Value) -Type $kind
@@ -321,6 +313,7 @@ function Set-RegistryValue {
         type           = $kind
         previousExists = ($null -ne $previous)
         verified       = ConvertTo-PlainString $verified
+        backupId       = $backupId
         backupPath     = $backupPath
     }
 }
@@ -385,4 +378,224 @@ function Get-NetworkConfig {
     }
     catch { }
     [ordered]@{ items = $adapters; count = $adapters.Count }
+}
+# ---------------------------------------------------------------------------
+# CL-013: settings backup / restore (GUID-only, reverse order)
+# ---------------------------------------------------------------------------
+function Get-SettingsBackupFile {
+    param([Parameter(Mandatory)][string]$BackupId)
+
+    # 只接受 GUID，绝不接受路径 —— 否则等于开了一个"读任意文件"的入口
+    if ($BackupId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+        throw "INVALID_PARAMS: backupId 必须是 GUID（收到 '$BackupId'）；不接受文件路径"
+    }
+    return (Join-Path $script:BackupRoot "$BackupId.json")
+}
+
+function Read-RegistryEntrySnapshot {
+    param([string]$Path, [string]$Name)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return [ordered]@{ kind = 'registry'; path = $Path; name = $Name; exists = $false; value = $null; valueType = $null; keyExisted = $false }
+    }
+    $keyItem = Get-Item -LiteralPath $Path
+    $exists = ($keyItem.GetValueNames() -contains $Name)
+    $value = $null
+    $valueType = $null
+    if ($exists) {
+        $valueType = 'String'
+        try { $valueType = [string]$keyItem.GetValueKind($Name) } catch { }
+        $value = ConvertTo-PlainString ($keyItem.GetValue($Name))
+    }
+    return [ordered]@{
+        kind       = 'registry'
+        path       = $Path
+        name       = $Name
+        exists     = $exists
+        value      = $value
+        valueType  = $valueType
+        keyExisted = $true
+    }
+}
+
+function Read-ServiceEntrySnapshot {
+    param([string]$Name)
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $svc) {
+        return [ordered]@{ kind = 'service'; name = $Name; exists = $false; startType = $null; status = $null }
+    }
+    $startType = ''
+    try {
+        $wmi = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f $Name) -ErrorAction Stop
+        $startType = [string]$wmi.StartMode
+    } catch {
+        $startType = ''
+    }
+    return [ordered]@{ kind = 'service'; name = $Name; exists = $true; startType = $startType; status = [string]$svc.Status }
+}
+
+function New-SettingsBackup {
+    param(
+        [string]$Operation = 'manual',
+        [string]$EntriesJson = '[]'
+    )
+
+    if (-not (Test-Path -LiteralPath $script:BackupRoot)) {
+        New-Item -ItemType Directory -Path $script:BackupRoot -Force | Out-Null
+    }
+
+    $requested = @()
+    if (-not [string]::IsNullOrWhiteSpace($EntriesJson)) {
+        $requested = @($EntriesJson | ConvertFrom-Json)
+    }
+
+    $captured = New-Object System.Collections.ArrayList
+    foreach ($entry in $requested) {
+        $kind = [string]$entry.kind
+        if ($kind -eq 'registry') {
+            [void]$captured.Add((Read-RegistryEntrySnapshot -Path ([string]$entry.path) -Name ([string]$entry.name)))
+        }
+        elseif ($kind -eq 'service') {
+            [void]$captured.Add((Read-ServiceEntrySnapshot -Name ([string]$entry.name)))
+        }
+        else {
+            throw "INVALID_PARAMS: 不支持的备份类型 '$kind'（registry|service）"
+        }
+    }
+
+    $backupId = [guid]::NewGuid().ToString()
+    $path = Join-Path $script:BackupRoot "$backupId.json"
+    $payload = [ordered]@{
+        schema         = 1
+        backupId       = $backupId
+        operation      = $Operation
+        machine        = $env:COMPUTERNAME
+        user           = $env:USERNAME
+        createdAt      = (Get-Date).ToString('o')
+        entries        = @($captured.ToArray())
+    }
+    ($payload | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $path -Encoding UTF8
+
+    [ordered]@{
+        backupId  = $backupId
+        path      = $path
+        operation = $Operation
+        entryCount = $captured.Count
+        entries   = @($captured.ToArray())
+    }
+}
+
+function Restore-SettingsBackup {
+    param([Parameter(Mandatory)][string]$BackupId)
+
+    $file = Get-SettingsBackupFile -BackupId $BackupId
+    if (-not (Test-Path -LiteralPath $file)) {
+        throw "BACKUP_NOT_FOUND: 备份 $BackupId 不存在（$file）"
+    }
+
+    $data = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+    if ([string]$data.machine -ne $env:COMPUTERNAME) {
+        throw "INVALID_PARAMS: 备份来自机器 '$($data.machine)'，当前是 '$env:COMPUTERNAME'，拒绝跨机恢复"
+    }
+
+    $entries = @($data.entries)
+    $restored = New-Object System.Collections.ArrayList
+    $failed = New-Object System.Collections.ArrayList
+
+    # 逆序恢复：同一项被多次修改时，先撤销最后一次改动才是正确状态
+    for ($index = $entries.Count - 1; $index -ge 0; $index--) {
+        $entry = $entries[$index]
+        try {
+            if ([string]$entry.kind -eq 'registry') {
+                $path = [string]$entry.path
+                $name = [string]$entry.name
+                if (-not (Test-Path -LiteralPath $path)) {
+                    # 键本身是新建的：保留空键（删除可能抹掉其他程序刚写入的值）
+                    [void]$restored.Add([ordered]@{ kind = 'registry'; path = $path; name = $name; action = 'skipped-key-missing' })
+                    continue
+                }
+                if ([bool]$entry.exists) {
+                    $valueType = [string]$entry.valueType
+                    $value = $entry.value
+                    if ($valueType -eq 'DWord' -or $valueType -eq 'QWord') {
+                        Set-ItemProperty -LiteralPath $path -Name $name -Value ([int64]$value) -Type $valueType
+                    }
+                    elseif ($valueType -eq 'MultiString') {
+                        $parts = @(([string]$value) -split "`n" | Where-Object { $_.Length -gt 0 })
+                        Set-ItemProperty -LiteralPath $path -Name $name -Value $parts -Type $valueType
+                    }
+                    else {
+                        Set-ItemProperty -LiteralPath $path -Name $name -Value ([string]$value) -Type $valueType
+                    }
+                    [void]$restored.Add([ordered]@{ kind = 'registry'; path = $path; name = $name; action = 'restored-value' })
+                }
+                else {
+                    # 原本不存在 → 精确还原"不存在"，而不是写个默认值
+                    Remove-ItemProperty -LiteralPath $path -Name $name -ErrorAction SilentlyContinue
+                    [void]$restored.Add([ordered]@{ kind = 'registry'; path = $path; name = $name; action = 'removed-value' })
+                }
+            }
+            elseif ([string]$entry.kind -eq 'service') {
+                $name = [string]$entry.name
+                if (-not [bool]$entry.exists) {
+                    [void]$restored.Add([ordered]@{ kind = 'service'; name = $name; action = 'skipped-service-missing' })
+                    continue
+                }
+                $startType = [string]$entry.startType
+                if (-not [string]::IsNullOrWhiteSpace($startType)) {
+                    Set-Service -Name $name -StartupType $startType -ErrorAction Stop
+                }
+                $targetStatus = [string]$entry.status
+                if ($targetStatus -eq 'Running') {
+                    Start-Service -Name $name -ErrorAction SilentlyContinue
+                }
+                elseif ($targetStatus -eq 'Stopped') {
+                    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+                }
+                [void]$restored.Add([ordered]@{ kind = 'service'; name = $name; action = 'restored-service'; startType = $startType })
+            }
+        }
+        catch {
+            [void]$failed.Add([ordered]@{ entry = $entry; message = $_.Exception.Message })
+        }
+    }
+
+    [ordered]@{
+        backupId     = $BackupId
+        operation    = [string]$data.operation
+        capturedAt   = [string]$data.createdAt
+        restoredCount = $restored.Count
+        failedCount   = $failed.Count
+        restored     = @($restored.ToArray())
+        failures     = @($failed.ToArray())
+    }
+}
+
+function Get-SettingsBackups {
+    param([int]$MaxItems = 20)
+
+    if (-not (Test-Path -LiteralPath $script:BackupRoot)) {
+        return [ordered]@{ items = @(); count = 0; root = $script:BackupRoot }
+    }
+
+    $items = New-Object System.Collections.ArrayList
+    $files = Get-ChildItem -LiteralPath $script:BackupRoot -Filter '*.json' -ErrorAction SilentlyContinue |
+        Sort-Object -Property LastWriteTime -Descending |
+        Select-Object -First $MaxItems
+
+    foreach ($file in $files) {
+        $meta = [ordered]@{ backupId = $file.BaseName; path = $file.FullName; sizeBytes = $file.Length; modifiedAt = $file.LastWriteTime.ToString('o') }
+        try {
+            $parsed = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+            $meta.operation = [string]$parsed.operation
+            $meta.createdAt = [string]$parsed.createdAt
+            $meta.entryCount = @($parsed.entries).Count
+        } catch {
+            $meta.parseError = '无法解析（可能写入中断）'
+        }
+        [void]$items.Add($meta)
+    }
+
+    [ordered]@{ items = @($items.ToArray()); count = $items.Count; root = $script:BackupRoot }
 }

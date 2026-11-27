@@ -64,10 +64,10 @@ afterAll(async () => {
 });
 
 describe('CL-003 win-system 能力定义', () => {
-  it('S-01 注册 11 个能力且风险标注正确', () => {
+  it('S-01 注册 13 个能力且风险标注正确', () => {
     const filler = new PowerShellBridge();
     const caps = systemCapabilities(filler);
-    expect(caps).toHaveLength(11);
+    expect(caps).toHaveLength(13);
     const byId = new Map(caps.map((item) => [item.id, item]));
     expect(byId.get('system.info.get')?.risk).toBe('L0');
     expect(byId.get('system.service.control')?.risk).toBe('L2');

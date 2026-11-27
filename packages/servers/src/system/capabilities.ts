@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { CapabilitySpec, PowerShellBridge } from '@win-mcp/core';
+import { guard } from '../shared/errors.js';
 
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -15,8 +16,12 @@ function bool(value: unknown): boolean {
 
 /** win-system：系统信息 / 服务 / 进程 / 事件日志 / 任务计划 / 注册表 / 启动项 / 网络 */
 export function systemCapabilities(bridge: PowerShellBridge): CapabilitySpec[] {
-  const call = <T>(fn: string, args: Record<string, unknown> = {}): Promise<T> =>
-    bridge.call<T>('module', { module: 'system', function: fn, args });
+  // guard() 让桥的领域错误码（BACKUP_NOT_FOUND / INVALID_PARAMS …）透传到能力面，
+  // 否则上层只能看到 INTERNAL，无法区分"参数错"和"内部错"。
+  const call = <T>(fn: string, args: Record<string, unknown> = {}, timeoutMs?: number): Promise<T> =>
+    guard(
+      bridge.call<T>('module', { module: 'system', function: fn, args }, timeoutMs !== undefined ? { timeoutMs } : {}),
+    );
 
   return [
     {
@@ -198,7 +203,7 @@ export function systemCapabilities(bridge: PowerShellBridge): CapabilitySpec[] {
           .describe('默认 String'),
       },
       async handler(params) {
-        const result = await call<{ backupPath?: string }>('Set-RegistryValue', {
+        const result = await call<{ backupId?: string; backupPath?: string }>('Set-RegistryValue', {
           Path: str(params.path),
           Name: str(params.name),
           Value: str(params.value),
@@ -206,8 +211,9 @@ export function systemCapabilities(bridge: PowerShellBridge): CapabilitySpec[] {
         });
         return {
           data: result,
-          ...(result.backupPath !== undefined
-            ? { warnings: [`旧值已备份：${result.backupPath}`] }
+          backupStatus: result.backupId !== undefined ? 'confirmed' : 'unconfirmed',
+          ...(result.backupId !== undefined
+            ? { warnings: [`原值已备份（backupId=${result.backupId}），可用 system.backup.restore 逐项还原`] }
             : {}),
         };
       },
@@ -233,6 +239,41 @@ export function systemCapabilities(bridge: PowerShellBridge): CapabilitySpec[] {
       inputSchema: {},
       async handler() {
         return { data: await call('Get-NetworkConfig') };
+      },
+    },
+    // ---------------- CL-013: 备份与回滚 ----------------
+    {
+      id: 'system.backup.list',
+      name: '备份列表',
+      description:
+        '列出本机设置备份（GUID/操作/条目数/时间），最新的在前（只读 L0）。' +
+        '备份目录是 %LOCALAPPDATA%\\win-mcp\\backups（非提权运行，故不用 ProgramData）。',
+      risk: 'L0',
+      idempotent: true,
+      inputSchema: {
+        maxItems: z.number().int().min(1).max(100).optional().describe('最多返回条数，默认 20'),
+      },
+      async handler(params) {
+        return { data: await call('Get-SettingsBackups', { MaxItems: num(params.maxItems, 20) }) };
+      },
+    },
+    {
+      id: 'system.backup.restore',
+      name: '回滚设置备份',
+      description:
+        '按 backupId（GUID）回滚一次修改（L2 需审批）。只接受 GUID，不接受路径。' +
+        '逆序恢复：同一项被多次修改时先撤销最后一次改动；原本不存在的值会被精确删除，而不是写默认值。' +
+        '空注册表键保留（删除可能抹掉其他程序刚写入的值）。',
+      risk: 'L2',
+      destructive: true,
+      inputSchema: {
+        backupId: z.string().min(8).describe('system.registry.write 或备份列表返回的 GUID'),
+      },
+      async handler(params) {
+        return {
+          data: await call('Restore-SettingsBackup', { BackupId: str(params.backupId) }, 120_000),
+          effectState: 'committed',
+        };
       },
     },
   ];

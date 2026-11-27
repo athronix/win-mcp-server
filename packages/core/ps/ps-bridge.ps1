@@ -34,7 +34,10 @@ $script:ModuleWhitelist = @{
         'Get-RegistryValue',
         'Set-RegistryValue',
         'Get-StartupItems',
-        'Get-NetworkConfig'
+        'Get-NetworkConfig',
+        'New-SettingsBackup',
+        'Restore-SettingsBackup',
+        'Get-SettingsBackups'
     )
     'shell' = @(
         'Get-ShellInfo',
@@ -44,6 +47,7 @@ $script:ModuleWhitelist = @{
         'Get-InstalledApps',
         'Get-WingetInfo',
         'Invoke-WingetAction',
+        'Get-WingetInstalledState',
         'Start-Application'
     )
     'resource' = @(

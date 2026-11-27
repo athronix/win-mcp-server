@@ -69,11 +69,11 @@ afterAll(async () => {
 });
 
 describe('CL-005/006 能力定义', () => {
-  it('C-01 apps 6 个、resource 4 个，ID 全部三段式', () => {
+  it('C-01 apps 8 个、resource 4 个，ID 全部三段式', () => {
     const filler = new PowerShellBridge();
     const apps = appsCapabilities(filler);
     const resource = resourceCapabilities(filler);
-    expect(apps).toHaveLength(6);
+    expect(apps).toHaveLength(8);
     expect(resource).toHaveLength(4);
     for (const cap of [...apps, ...resource]) {
       expect(cap.id).toMatch(/^(apps|resource)\.[a-z-]+\.[a-z-]+$/);

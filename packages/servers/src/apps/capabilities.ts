@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import type { CapabilitySpec, PowerShellBridge } from '@win-mcp/core';
+import { PlanStore, ToolFailure, type CapabilitySpec, type PowerShellBridge } from '@win-mcp/core';
+import { guard } from '../shared/errors.js';
+import { buildWingetPlan, type WingetOperation, type WingetPlan } from './plan.js';
 
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -13,6 +15,11 @@ function num(value: unknown, fallback: number): number {
 export function appsCapabilities(bridge: PowerShellBridge): CapabilitySpec[] {
   const call = <T>(fn: string, args: Record<string, unknown> = {}, timeoutMs?: number): Promise<T> =>
     bridge.call<T>('module', { module: 'apps', function: fn, args }, timeoutMs !== undefined ? { timeoutMs } : {});
+
+  // 计划一次性、5 分钟过期；planId 只证明"与预览一致"，不代替用户同意
+  const plans = new PlanStore();
+
+  const planOperation = (operation: WingetOperation): string => `winget.${operation}`;
 
   return [
     {
@@ -128,6 +135,136 @@ export function appsCapabilities(bridge: PowerShellBridge): CapabilitySpec[] {
             Arguments: str(params.arguments),
           }),
           effectState: 'committed',
+        };
+      },
+    },
+    // ---------------- CL-013: planId 三分支 ----------------
+    {
+      id: 'apps.winget.plan',
+      name: '生成 winget 计划',
+      description:
+        '预览安装/卸载计划并返回 planId（L1，不做任何变更）。三个分支：' +
+        'status=blocked（有 blocker，整份拒绝）/ no-changes（目标状态已满足，执行不会有变更）/ ready（有真实变更）。' +
+        '再用相同参数 + planId + confirm=true 调 apps.winget.apply 执行。planId 5 分钟过期、一次性。',
+      risk: 'L1',
+      idempotent: true,
+      timeoutMs: 120_000,
+      inputSchema: {
+        operation: z.enum(['install', 'uninstall']).describe('install 或 uninstall'),
+        ids: z.array(z.string().min(1)).min(1).max(20).describe('winget 包 ID（Publisher.Package，精确匹配）'),
+      },
+      async handler(params) {
+        const operation = str(params.operation, 'install') as WingetOperation;
+        const ids = Array.isArray(params.ids) ? (params.ids as string[]) : [];
+
+        const state = await guard(
+          call<{ available: boolean; version: string; packages: { id: string; installed: boolean }[] }>(
+            'Get-WingetInstalledState',
+            { IdsJson: JSON.stringify(ids) },
+            90_000,
+          ),
+        );
+
+        // 只把"已安装"的包折成 installed 列表交给纯函数，避免误判
+        const installed = (state.packages ?? []).filter((item) => item.installed).map((item) => ({ id: item.id }));
+        const plan = buildWingetPlan({
+          operation,
+          ids,
+          installed,
+          wingetAvailable: state.available,
+          ...(state.version !== undefined ? { wingetVersion: state.version } : {}),
+        });
+
+        const added = plans.add(planOperation(operation), { operation, ids }, plan);
+        return {
+          data: {
+            planId: added.planId,
+            expiresAt: new Date(added.expiresAt).toISOString(),
+            plan,
+            nextStep:
+              plan.status === 'ready'
+                ? '向用户展示 plan.summary 与 changes，得到同意后用相同 operation/ids + planId + confirm=true 调 apps.winget.apply'
+                : '该计划不会执行任何变更；把 blockers / noChanges 原样告知用户即可',
+          },
+          warnings:
+            plan.unverified.length > 0
+              ? [`以下包未能确认在源中存在（需要联网逐一核实，执行时 winget 会最终判定）：${plan.unverified.join(', ')}`]
+              : [],
+        };
+      },
+    },
+    {
+      id: 'apps.winget.apply',
+      name: '执行 winget 计划',
+      description:
+        '按 planId 执行 apps.winget.plan 生成的计划（L2 需审批）。operation 与 ids 必须与预览完全一致，否则 PLAN_MISMATCH。' +
+        'blocked 计划返回 PLAN_BLOCKED；no-changes 计划返回 NO_CHANGES 且不做任何动作。第三方安装器无法自动回滚。',
+      risk: 'L2',
+      destructive: true,
+      timeoutMs: 600_000,
+      inputSchema: {
+        planId: z.string().min(8).describe('apps.winget.plan 返回的 planId'),
+        operation: z.enum(['install', 'uninstall']).describe('必须与预览时一致'),
+        ids: z.array(z.string().min(1)).min(1).max(20).describe('必须与预览时完全一致'),
+        confirm: z.literal(true).describe('必须显式传 true，表示已展示给用户并获得同意'),
+      },
+      async handler(params) {
+        const operation = str(params.operation, 'install') as WingetOperation;
+        const ids = Array.isArray(params.ids) ? (params.ids as string[]) : [];
+        const consumed = plans.consume<WingetPlan>(str(params.planId), planOperation(operation), { operation, ids });
+        if (!consumed.ok) {
+          throw new ToolFailure(consumed.code, consumed.message);
+        }
+        const plan = consumed.plan;
+
+        if (plan.status === 'blocked') {
+          throw new ToolFailure('PLAN_BLOCKED', `计划被拒绝：${plan.blockers.join('；')}`, { blockers: plan.blockers });
+        }
+        if (plan.status === 'no-changes') {
+          return {
+            data: { status: 'no-changes', executed: 0, plan },
+            warnings: ['目标状态已满足，未执行任何操作'],
+          };
+        }
+
+        const results: { id: string; ok: boolean; exitCode?: number; output?: string }[] = [];
+        for (const change of plan.changes) {
+          try {
+            const result = await call<{ ok: boolean; exitCode: number; text: string }>(
+              'Invoke-WingetAction',
+              { Action: change.action, Target: change.id },
+              300_000,
+            );
+            results.push({
+              id: change.id,
+              ok: result.ok === true,
+              exitCode: result.exitCode,
+              output: String(result.text ?? '').slice(-600),
+            });
+          } catch (error) {
+            // 第三方安装器失败不保证可逆：逐项记录，继续下一项，最后统一报告
+            results.push({
+              id: change.id,
+              ok: false,
+              output: error instanceof Error ? error.message.slice(0, 600) : String(error).slice(0, 600),
+            });
+          }
+        }
+
+        const failedItems = results.filter((item) => !item.ok);
+        return {
+          data: {
+            status: failedItems.length === 0 ? 'applied' : 'partially-applied',
+            executed: results.length,
+            failed: failedItems.length,
+            results,
+            plan,
+            rollback: '第三方安装器不支持自动回滚；如需撤销请用 appwiz 或 winget uninstall 人工处理',
+          },
+          effectState: failedItems.length === 0 ? 'committed' : 'unknown',
+          ...(failedItems.length > 0
+            ? { warnings: [`${failedItems.length}/${results.length} 项失败，效果未知，不要盲目重试同一 planId（已一次性消费）`] }
+            : {}),
         };
       },
     },

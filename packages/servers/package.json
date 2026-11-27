@@ -1,6 +1,6 @@
 {
   "name": "@win-mcp/servers",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "win-mcp-servers 六个业务 server（system/apps/browser/desktop/resource/shell）",

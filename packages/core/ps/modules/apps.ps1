@@ -148,3 +148,47 @@ function Start-Application {
     }
     [ordered]@{ started = $true; name = $Name; resolvedPath = $resolved; arguments = $Arguments }
 }
+# ---------------------------------------------------------------------------
+# CL-013: winget 计划用的"已装状态"探测
+# ---------------------------------------------------------------------------
+function Get-WingetInstalledState {
+    param([string]$IdsJson = '[]', [int]$MaxOutputChars = 200000)
+
+    $info = Get-WingetInfo
+    if ($info.available -ne $true) {
+        return [ordered]@{ available = $false; version = ''; packages = @(); source = 'winget-not-found' }
+    }
+
+    $ids = @()
+    if (-not [string]::IsNullOrWhiteSpace($IdsJson)) {
+        $ids = @($IdsJson | ConvertFrom-Json)
+    }
+
+    # 一次 list 比 N 次 `list --id` 快得多；用 Id 列做子串匹配，
+    # 这是启发式（Id 列不会被截断），但足以区分"装了/没装"。
+    $text = ''
+    try {
+        $text = [string](& winget list --accept-source-agreements 2>&1 | Out-String -Width 4096)
+    } catch {
+        return [ordered]@{ available = $false; version = $info.version; packages = @(); source = 'list-failed'; message = $_.Exception.Message }
+    }
+
+    if ($text.Length -gt $MaxOutputChars) { $text = $text.Substring(0, $MaxOutputChars) }
+
+    $packages = New-Object System.Collections.ArrayList
+    foreach ($id in $ids) {
+        $needle = [string]$id
+        $installed = $false
+        if ($needle.Length -gt 0) {
+            $installed = $text.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        }
+        [void]$packages.Add([ordered]@{ id = $needle; installed = $installed })
+    }
+
+    [ordered]@{
+        available = $true
+        version   = $info.version
+        packages  = @($packages.ToArray())
+        source    = 'winget-list'
+    }
+}
