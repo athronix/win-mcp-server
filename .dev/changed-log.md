@@ -2,6 +2,38 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-004 win-shell（v0.4.0）
+
+| 项 | 内容 |
+|---|---|
+| 状态 | ✅ 完成（2026-11-26） |
+| 类型 | feat（最高危 server） |
+
+### 交付
+
+- `packages/core/ps/modules/shell.ps1`：`Get-ShellInfo`（Git-Bash 探测）、`Invoke-BashCommand`（`AddScript`+`AddArgument` 避免拼接注入 + 超时 Kill）
+- `packages/servers/src/shell/bash-classify.ts`：bash 词表分级 + 9 条硬禁
+- `packages/servers/src/shell/capabilities.ts`：4 能力 + `createShellClassifier`（bash / runAdmin / 真 AST 三路）
+- `packages/servers/src/shell/bin.ts`
+- core 增强：`CapabilitySpec.analysisOnly`、`PolicyRequest.analysisOnly`、`expandEnvVars()` + `PolicyEngine` 可注入 env
+- `docs/changes/CL-004.md`
+
+### 验证
+
+| 关卡 | 结果 |
+|---|---|
+| `npm run typecheck` | 0 error |
+| `npm test` | **163 passed / 14 files** |
+| 真机 | analyze(iex)=blocked L3 / invoke(iex)=COMMAND_BLOCKED 无 approvalId / invoke(1+1)=2 / Remove-Item $env:TEMP=APPROVAL_REQUIRED / runAsAdmin=ADMIN_REQUIRED / bash echo=ok |
+
+### 缺陷修正（策略缺口）
+
+1. 预检能力被命令黑名单误拦 → 新增 `analysisOnly` 豁免（仅限无副作用能力）
+2. `$env:TEMP` 未展开致白名单误拒 → `expandEnvVars` + env 注入
+3. 能力 ID 两段式非法 → 统一三段式
+
+---
+
 ## CL-003 win-system（v0.3.0）
 
 | 项 | 内容 |

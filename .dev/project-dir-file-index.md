@@ -1,6 +1,6 @@
 # 项目目录与文件索引
 
-> 最后更新：2026-11-26 · 版本 v0.3.0
+> 最后更新：2026-11-26 · 版本 v0.4.0
 
 ## 根目录
 
@@ -54,7 +54,9 @@
 
 | 文件 | 职责 |
 |---|---|
-| `ps-bridge.ps1` | NDJSON 主循环；`ping/info/parse/invoke`；官方 AST 解析；独立 runspace 受控执行 + 超时 Stop（全英文输出，兼容 PS 5.1 编码） |
+| `ps-bridge.ps1` | NDJSON 主循环；`ping/info/parse/invoke/module`；官方 AST 解析；独立 runspace 受控执行 + 超时 Stop（全英文输出，兼容 PS 5.1 编码） |
+| `modules/system.ps1` | 11 个系统函数（概览/服务/进程/事件日志/任务/注册表读写/启动项/网络） |
+| `modules/shell.ps1` | Git-Bash 探测与 `bash -lc` 受控执行 |
 
 ## `packages/core/tests/`（139 条）
 
