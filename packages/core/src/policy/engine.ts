@@ -12,6 +12,7 @@ import {
   normalizePath,
   pathCandidates,
   pathMatchesAny,
+  type StringValue,
 } from './glob.js';
 
 export interface PolicyRequest {
@@ -22,6 +23,11 @@ export interface PolicyRequest {
   maxRisk?: RiskLevel;
   forceApproval?: boolean;
   capabilityPolicy?: CapabilityPolicy;
+  /**
+   * 可选的路径证据（来自 AST 解析）。一旦提供，命令型参数不再用正则从原文抽路径，
+   * 而是只信任该证据——否则注释、here-string 里的路径文本会被误判为真实操作目标。
+   */
+  pathEvidence?: readonly string[];
 }
 
 export interface PolicyVerdict {
@@ -66,11 +72,24 @@ export class PolicyEngine {
     }
 
     const values = collectStringValues(req.params);
+    const evidence = req.pathEvidence;
+
+    // 命令型 vs 路径型参数的判定（AST 证据只替代命令型参数的路径来源）
+    const isCommandish = (key: string, value: string): boolean =>
+      isCommandishKey(key) || looksLikeCommandValue(value);
+
+    const candidatesFor = (key: string, value: string): string[] => {
+      if (evidence === undefined) return pathCandidates(key, value);
+      if (isCommandish(key, value)) {
+        return evidence.filter((item) => !looksLikeRegistryPath(item));
+      }
+      return pathCandidates(key, value);
+    };
 
     // 2. 路径黑名单（最高优先级）
     const capabilityPathDeny = (req.capabilityPolicy?.pathDenylist ?? []).map(globToRegex);
     for (const { key, value } of values) {
-      for (const candidate of pathCandidates(key, value)) {
+      for (const candidate of candidatesFor(key, value)) {
         const p = normalizePath(candidate);
         const denyRes = [...this.#pathDenyRe, ...capabilityPathDeny];
         if (pathMatchesAny(p, denyRes)) {
@@ -113,7 +132,7 @@ export class PolicyEngine {
       const allowRes = [...this.#pathAllowRe, ...capabilityPathAllow];
       if (allowRes.length > 0) {
         for (const { key, value } of values) {
-          for (const candidate of pathCandidates(key, value)) {
+          for (const candidate of candidatesFor(key, value)) {
             const p = normalizePath(candidate);
             if (!pathMatchesAny(p, allowRes)) {
               return this.#deny('pathAllowlist:miss', `路径不在白名单内，已拒绝：${candidate}`, {
@@ -126,7 +145,16 @@ export class PolicyEngine {
     }
 
     // 4b. 注册表读写范围
-    const registryValues = values.filter((v) => looksLikeRegistryPath(v.value));
+    const registryValues: StringValue[] = [];
+    for (const { key, value } of values) {
+      if (evidence !== undefined && isCommandish(key, value)) continue;
+      if (looksLikeRegistryPath(value)) registryValues.push({ key, value });
+    }
+    if (evidence !== undefined) {
+      for (const item of evidence) {
+        if (looksLikeRegistryPath(item)) registryValues.push({ key: 'command', value: item });
+      }
+    }
     if (registryValues.length > 0) {
       const isWrite = WRITE_ACTION_PATTERN.test(req.capabilityId);
       const allowList = isWrite

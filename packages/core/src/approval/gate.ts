@@ -27,6 +27,8 @@ export interface DynamicClassification {
   preview: Record<string, unknown>;
   impact: string[];
   analysis?: unknown;
+  /** AST 采集的可信路径证据；提供后 policy 不再从命令原文正则抽路径（避免注释误判） */
+  paths?: string[];
   blocked?: { code: ErrorCode; message: string; analysis?: unknown };
 }
 
@@ -81,6 +83,7 @@ interface GuardContext {
   preview: Record<string, unknown>;
   impact: string[];
   analysis?: unknown;
+  pathEvidence?: readonly string[];
   forceApproval: boolean;
   branch: ApprovalBranch;
 }
@@ -133,6 +136,7 @@ export class ToolGate {
     let preview: Record<string, unknown> = {};
     let impact: string[] = [];
     let analysis: unknown;
+    let pathEvidence: readonly string[] | undefined;
 
     if (capability.dynamicRisk) {
       if (this.#classify === undefined) {
@@ -190,6 +194,7 @@ export class ToolGate {
       preview = classification.preview;
       impact = classification.impact;
       analysis = classification.analysis;
+      if (classification.paths !== undefined) pathEvidence = classification.paths;
     }
 
     return this.#guardAndExecute(
@@ -202,6 +207,7 @@ export class ToolGate {
         preview,
         impact,
         ...(analysis !== undefined ? { analysis } : {}),
+        ...(pathEvidence !== undefined ? { pathEvidence } : {}),
         forceApproval: false,
         branch: req.branch ?? 'local',
       },
@@ -273,6 +279,7 @@ export class ToolGate {
       ...(ctx.capability.policy !== undefined
         ? { capabilityPolicy: ctx.capability.policy }
         : {}),
+      ...(ctx.pathEvidence !== undefined ? { pathEvidence: ctx.pathEvidence } : {}),
       ...(ctx.forceApproval ? { forceApproval: true } : {}),
     });
 

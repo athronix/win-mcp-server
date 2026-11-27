@@ -23,6 +23,10 @@ export * from './approval/store.js';
 export * from './approval/policy-control.js';
 export * from './approval/gate.js';
 
+export * from './bridge/protocol.js';
+export * from './bridge/bridge.js';
+export * from './bridge/ast.js';
+
 export * from './audit/chain.js';
 
 export * from './guard/expect.js';

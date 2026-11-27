@@ -288,6 +288,12 @@ export interface PolicyRequest {
   capabilityId: string; params: Record<string, unknown>; risk: RiskLevel;
   approved: boolean; maxRisk?: RiskLevel; forceApproval?: boolean;
   capabilityPolicy?: CapabilityPolicy;
+  /**
+   * 可选的路径证据（来自 AST 解析）。提供后，命令型参数不再用正则从原文抽路径，
+   * 只信任该证据——否则注释、here-string 里的路径文本会被误判为真实操作目标。
+   * 显式路径参数（如 path）不受影响，仍按值判定。
+   */
+  pathEvidence?: readonly string[];
 }
 export interface PolicyVerdict {
   allowed: boolean; matchedRule: string; requiresApproval: boolean;

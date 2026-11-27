@@ -22,17 +22,22 @@ Windows 系统 / 软件 / 浏览器 / 桌面 / 资源 / 命令通道 的 MCP ser
 npm install
 npm run build
 
-npm test          # 106 条单元/集成测试
-npm run smoke     # 12 项分级/审批冒烟（真实 MCP 客户端）
-npm run check     # typecheck + test + smoke
+npm test              # 139 条单元/集成测试（含真机 AST）
+npm run smoke         # 12 项分级/审批冒烟（真实 MCP 客户端）
+npm run smoke:bridge  # 6 项 PowerShell 桥冒烟（真机 pwsh）
+npm run check         # build + typecheck + test + 两个冒烟 + 文档门禁
 ```
 
 跑一个演示 server（不执行任何真实系统写操作）：
 
 ```bash
-node examples/demo-server.mjs            # stdio
-node examples/demo-server.mjs --http 8765 # HTTP + /health
+node examples/demo-server.mjs               # stdio（内置保守 fallback 解析）
+node examples/demo-server.mjs --ps          # stdio + 真 PowerShell AST
+node examples/demo-server.mjs --http 8765   # HTTP + /health
 ```
+
+**`--ps` 会启动常驻 pwsh 桥**（`ps/ps-bridge.ps1`），用于官方 AST 解析与受控执行；
+桥启动失败会自动回退 fallback，并在 stderr 说明原因。
 
 ## 架构
 
@@ -53,6 +58,8 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 |---|---|
 | `packages/core/src/contracts` | 风险等级、错误码、能力模型、统一 envelope |
 | `packages/core/src/classify` | L0–L3 词表、14 条硬禁、AST 判级（可注入） |
+| `packages/core/src/bridge` | PowerShell 常驻桥（NDJSON）、真 AST 解析、受控执行 |
+| `packages/core/ps/ps-bridge.ps1` | 桥脚本：`ping/info/parse/invoke` |
 | `packages/core/src/policy` | glob、默认红线、拒绝优先 7 步判定 |
 | `packages/core/src/approval` | 参数哈希、审批表、防自我放权、8 步编排 |
 | `packages/core/src/audit` | HashChain + 脱敏 + 校验 |
@@ -73,7 +80,7 @@ MCP Client (WorkBuddy / Claude Code / Cursor)
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | v0.1.0 | 底座：分级/策略/审批/审计/守卫/并发/网关 | ✅ |
-| CL-002 | PowerShell 常驻桥 + 真 AST 解析注入 | 待开始 |
+| CL-002 | PowerShell 常驻桥 + 真 AST 解析注入 | ✅ |
 | CL-003 | `win-system`（注册表/服务/进程/事件日志） | 待开始 |
 | CL-004 | `win-shell`（可见控制台 + Git-Bash adapter） | 待开始 |
 | CL-005 | `win-apps`（winget + planId 分支） | 待开始 |

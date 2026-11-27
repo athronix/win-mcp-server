@@ -253,4 +253,42 @@ describe('ToolGate 审批编排（FR-104/109）', () => {
     });
     expect(outcome.envelope.error?.code).toBe('TIMEOUT');
   });
+
+  it('T-15 动态判级提供空路径证据时，命令文本里的路径不触发策略拒绝', async () => {
+    const { gate } = makeGate({
+      classify: () => ({ risk: 'L0', preview: {}, impact: [], paths: [] }),
+    });
+    const capability = cap({
+      id: 'shell.cmd.invoke',
+      name: '命令执行',
+      description: '动态分级执行',
+      risk: 'L1',
+      dynamicRisk: true,
+    });
+    const outcome = await gate.run(
+      { capability, params: { command: '# Remove-Item C:\\Windows\\x' } },
+      async () => ({ data: { executed: true } }),
+    );
+    expect(outcome.executed).toBe(true);
+    expect(outcome.envelope.error).toBeUndefined();
+  });
+
+  it('T-16 动态判级提供命中的路径证据时仍被策略拒绝', async () => {
+    const { gate } = makeGate({
+      classify: () => ({ risk: 'L3', preview: {}, impact: [], paths: ['C:\\Windows\\x'] }),
+    });
+    const capability = cap({
+      id: 'shell.cmd.invoke',
+      name: '命令执行',
+      description: '动态分级执行',
+      risk: 'L1',
+      dynamicRisk: true,
+    });
+    const outcome = await gate.run(
+      { capability, params: { command: 'Remove-Item C:\\Windows\\x' } },
+      async () => ({ data: {} }),
+    );
+    expect(outcome.executed).toBe(false);
+    expect(outcome.envelope.error?.code).toBe('POLICY_DENIED');
+  });
 });

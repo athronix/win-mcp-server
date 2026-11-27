@@ -12,7 +12,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC_DIR = 'packages/core/src';
-const DOC = 'docs/02-design/TECHNICAL-SOLUTION-core.md';
+const DOCS = [
+  'docs/02-design/TECHNICAL-SOLUTION-core.md',
+  'docs/02-design/TECHNICAL-SOLUTION-bridge.md',
+];
 
 const KEY_APIS = [
   'riskRank', 'maxRisk', 'riskAtLeast', 'isRiskLevel',
@@ -27,6 +30,8 @@ const KEY_APIS = [
   'CategorySemaphore',
   'createWinMcpServer', 'registerCapabilityTools', 'toCallResult', 'startStdio', 'startHttp',
   'MAX_INSTRUCTIONS_BYTES',
+  'PowerShellBridge', 'BridgeError', 'encodeRequest', 'parseResponseLine',
+  'parseWithBridge', 'analyzeCommandWithBridge', 'createBridgeClassifier', 'bridgeErrorToCode',
 ];
 
 function walk(dir) {
@@ -40,7 +45,7 @@ function walk(dir) {
 }
 
 const sources = walk(SRC_DIR).map((file) => readFileSync(file, 'utf8')).join('\n');
-const doc = readFileSync(DOC, 'utf8');
+const doc = DOCS.map((file) => readFileSync(file, 'utf8')).join('\n');
 
 const missingInCode = [];
 const missingInDoc = [];

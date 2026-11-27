@@ -228,4 +228,39 @@ describe('FR-103 策略判定', () => {
     expect(v.allowed).toBe(false);
     expect(v.matchedRule).toBe('pathAllowlist:miss');
   });
+
+  it('P-21 提供 pathEvidence 时命令原文路径不参与判定（注释场景不误拒）', () => {
+    const v = engine.evaluate({
+      capabilityId: 'shell.cmd.invoke',
+      params: { command: '# Remove-Item C:\\Windows\\x' },
+      risk: 'L0',
+      approved: false,
+      pathEvidence: [],
+    });
+    expect(v.allowed).toBe(true);
+  });
+
+  it('P-22 pathEvidence 命中黑名单仍然拒绝', () => {
+    const v = engine.evaluate({
+      capabilityId: 'shell.cmd.invoke',
+      params: { command: 'Get-ChildItem C:\\Windows' },
+      risk: 'L0',
+      approved: false,
+      pathEvidence: ['C:\\Windows'],
+    });
+    expect(v.allowed).toBe(false);
+    expect(v.matchedRule).toBe('pathDenylist');
+  });
+
+  it('P-23 显式路径参数不受 pathEvidence 影响', () => {
+    const v = engine.evaluate({
+      capabilityId: 'system.file.write',
+      params: { path: 'C:\\Windows\\x.txt' },
+      risk: 'L1',
+      approved: false,
+      pathEvidence: [],
+    });
+    expect(v.allowed).toBe(false);
+    expect(v.matchedRule).toBe('pathDenylist');
+  });
 });

@@ -17,8 +17,10 @@ import {
   CapabilityRegistry,
   DEFAULT_POLICY,
   PolicyEngine,
+  PowerShellBridge,
   ToolGate,
   analyzeCommand,
+  createBridgeClassifier,
   createWinMcpServer,
   startHttp,
   startStdio,
@@ -83,14 +85,36 @@ function classifyShellCommand(_capability, params) {
         ? analysis.paths.map((path) => `路径影响：${path}`)
         : ['命令未声明明确路径影响；请确认其副作用与预期一致'],
     analysis,
+    paths: analysis.paths,
   };
+}
+
+// --ps：启用真 PowerShell AST（CL-002）；不传则用内置保守 fallback
+const useBridge = process.argv.includes('--ps');
+let bridge;
+let classifier = classifyShellCommand;
+let parserKind = 'fallback';
+
+if (useBridge) {
+  bridge = new PowerShellBridge({ requestTimeoutMs: 20_000, startTimeoutMs: 20_000 });
+  try {
+    const info = await bridge.start();
+    classifier = createBridgeClassifier(bridge);
+    parserKind = 'powershell-ast';
+    process.stderr.write(`[demo] 真 AST 已启用：${info.executable} ${info.version}（elevated=${info.elevated}）\n`);
+  } catch (error) {
+    bridge = undefined;
+    process.stderr.write(
+      `[demo] PowerShell 桥启动失败，回退 fallback：${error instanceof Error ? error.message : String(error)}\n`,
+    );
+  }
 }
 
 const gate = new ToolGate({
   policy,
   store,
   audit,
-  classify: classifyShellCommand,
+  classify: classifier,
 });
 
 registry.registerAll([
@@ -167,7 +191,7 @@ registry.registerAll([
 
 const server = createWinMcpServer({
   name: 'win-mcp-demo',
-  version: '0.1.0',
+  version: '0.2.0',
   instructions: INSTRUCTIONS,
   registry,
   gate,
@@ -183,13 +207,19 @@ const server = createWinMcpServer({
 function health() {
   return {
     name: 'win-mcp-demo',
-    version: '0.1.0',
+    version: '0.2.0',
     capabilities: registry.size,
     pendingApprovals: store.size,
     chainValid: audit.verify().valid,
     auditEntries: audit.entries().length,
     autoApprove: autoApproveState,
+    parser: parserKind,
+    bridgeRunning: bridge !== undefined && bridge.status.running,
   };
+}
+
+async function shutdown() {
+  if (bridge !== undefined) await bridge.stop();
 }
 
 const httpIndex = process.argv.indexOf('--http');
@@ -198,10 +228,15 @@ if (httpIndex >= 0) {
   const httpServer = await startHttp(server, { port, health });
   process.stderr.write(`[demo] http://localhost:${port}/mcp (health: /health)\n`);
   process.on('SIGTERM', () => {
-    httpServer.close();
-    process.exit(0);
+    void shutdown().finally(() => {
+      httpServer.close();
+      process.exit(0);
+    });
   });
 } else {
   await startStdio(server);
   process.stderr.write('[demo] stdio ready\n');
+  process.on('SIGTERM', () => {
+    void shutdown().finally(() => process.exit(0));
+  });
 }
