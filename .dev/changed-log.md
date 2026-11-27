@@ -2,6 +2,17 @@
 
 > 每个 CL 测试通过后从 `changing-log.md` 迁移至此，按时间倒序。
 
+## CL-014 资源调优：声明式目录 + 快照 + 一键回滚（v0.11.0）
+
+| 项 | 内容 |
+|---|---|
+| 新增能力 | `resource.tune.catalog`(L0) / `tune.plan`(L1) / `tune.apply`(L2) / `tune.rollback`(L2) / `tune.snapshots`(L0) |
+| PS 新增 | `Get-TuningCatalog` / `New-TuningSnapshot` / `Invoke-TuningApply` / `Restore-TuningSnapshot` / `Get-TuningSnapshots` |
+| 参考来源 | agentic-workstation-optimizer（快照 schema、only-first-baseline、null 精确还原） |
+| 关键设计 | 目录硬编码 5 项（不接受任意写入）；快照在首次修改前落盘；逆序回滚；未提权项标 ADMIN_REQUIRED 不静默跳 |
+| 修复缺陷 | 未知 key 时仍建快照导致抛错，plan 拿不到结构化 blockers |
+| 验证 | 283 测试 / 22 文件；smoke:tune 10/10（真实 HKCU 往返，回滚后值复原） |
+
 ## CL-013 计划与回滚：planId 三分支 + backupId 逆序恢复（v0.10.0）
 
 | 项 | 内容 |
