@@ -20,6 +20,35 @@ try { $script:OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 $script:MaxOutputCharsDefault = 100000
 
+# --- Capability modules (explicit whitelist; never expose arbitrary invocation) ---
+$script:ModuleRoot = Join-Path $PSScriptRoot 'modules'
+$script:ModuleWhitelist = @{
+    'system' = @(
+        'Get-SystemOverview',
+        'Get-ServiceList',
+        'Invoke-ServiceAction',
+        'Get-ProcessList',
+        'Stop-ProcessItem',
+        'Get-EventLogEntries',
+        'Get-ScheduledTaskList',
+        'Get-RegistryValue',
+        'Set-RegistryValue',
+        'Get-StartupItems',
+        'Get-NetworkConfig'
+    )
+}
+$script:LoadedModules = @{}
+
+# NOTE: dot-sourcing must happen in the script scope (main loop), not inside a
+# function -- otherwise the module functions disappear when the function returns.
+function Resolve-CapabilityModulePath {
+    param([string]$Name)
+    if (-not $script:ModuleWhitelist.ContainsKey($Name)) { throw "UNKNOWN_MODULE: $Name" }
+    $path = Join-Path $script:ModuleRoot "$Name.ps1"
+    if (-not (Test-Path -LiteralPath $path)) { throw "UNKNOWN_MODULE: $Name" }
+    return $path
+}
+
 function Write-ProtocolLine {
     param([string]$Json)
     [Console]::Out.WriteLine($Json)
@@ -300,6 +329,30 @@ while ($true) {
                 else {
                     Send-Fail -Id $requestId -Code ([string]$result.error.code) -Message ([string]$result.error.message) -DurationMs ([int]$stopwatch.ElapsedMilliseconds)
                 }
+            }
+            'module' {
+                $moduleName = [string](Get-ParamValue -Params $request.params -Name 'module' -Default '')
+                $functionName = [string](Get-ParamValue -Params $request.params -Name 'function' -Default '')
+                if (-not $script:ModuleWhitelist.ContainsKey($moduleName)) {
+                    throw "UNKNOWN_MODULE: $moduleName"
+                }
+                if (-not ($script:ModuleWhitelist[$moduleName] -contains $functionName)) {
+                    throw "FUNCTION_NOT_ALLOWED: $moduleName/$functionName"
+                }
+                if (-not $script:LoadedModules.ContainsKey($moduleName)) {
+                    # 脚本作用域 dot-source，模块函数对后续 & 调用可见
+                    . (Resolve-CapabilityModulePath -Name $moduleName)
+                    $script:LoadedModules[$moduleName] = $true
+                }
+                $argTable = @{}
+                $rawArgs = Get-ParamValue -Params $request.params -Name 'args' -Default $null
+                if ($null -ne $rawArgs) {
+                    foreach ($property in $rawArgs.PSObject.Properties) {
+                        $argTable[$property.Name] = $property.Value
+                    }
+                }
+                $moduleResult = & $functionName @argTable
+                Send-Ok -Id $requestId -Data $moduleResult -DurationMs ([int]$stopwatch.ElapsedMilliseconds)
             }
             default {
                 Send-Fail -Id $requestId -Code 'UNKNOWN_OP' -Message "unsupported op: $op" -DurationMs ([int]$stopwatch.ElapsedMilliseconds)

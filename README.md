@@ -39,6 +39,18 @@ node examples/demo-server.mjs --http 8765   # HTTP + /health
 **`--ps` 会启动常驻 pwsh 桥**（`ps/ps-bridge.ps1`），用于官方 AST 解析与受控执行；
 桥启动失败会自动回退 fallback，并在 stderr 说明原因。
 
+## 已实现的 server
+
+| server | 入口（stdio） | 能力数 | 状态 |
+|---|---|---|---|
+| `win-system` | `node packages/servers/dist/system/bin.js` | 11 | ✅ v0.3.0 |
+| `win-shell` | 待 CL-004 | — | ⏳ |
+| `win-apps` / `win-resource` | 待 CL-005/006 | — | ⏳ |
+| `win-desktop` / `win-browser` | 待 CL-007/008 | — | ⏳ |
+
+system 能力：`system.info.get`、`service.list/control`、`process.list/terminate`、`eventlog.query`、`task.list`、`registry.read/write`、`startup.list`、`network.get`。
+只读全部 L0 直放；服务控制/结束进程/写注册表为 L2，走审批；受保护进程与 HKLM 写由策略直拒。
+
 ## 架构
 
 ```
